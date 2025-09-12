@@ -42,6 +42,7 @@
             transform: translateX(100%);
             opacity: 0;
             visibility: hidden;
+            box-shadow: -5px 0px 20px rgba(0,0,0,0.3);
         }
         #ui-overlay.visible {
             transform: translateX(0);
@@ -63,7 +64,12 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: opacity 0.5s ease-in-out;
+            transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+            box-shadow: 0px 0px 15px rgba(0,0,0,0.3);
+        }
+        /* New class to move the button when the UI panel is open */
+        #toggle-ui-button.ui-open {
+            transform: translateX(-316px); /* 300px panel width + 1rem (16px) gap */
         }
     </style>
 </head>
@@ -97,23 +103,23 @@
                     <div class="flex items-center justify-between"><label for="speed" class="font-semibold text-gray-300">Sim Speed:</label><input type="range" id="speed" min="1" max="50" value="10" class="w-2/3 accent-cyan-500"></div>
                     <div class="flex items-center justify-between"><label for="viewMode" class="font-semibold text-gray-300">View:</label><select id="viewMode" class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 w-2/3"><option value="terrain">Terrain</option><option value="temp">Temperature</option><option value="weather">Weather</option><option value="flow">Water Flow</option></select></div>
                     <div class="flex items-center justify-between"><label for="hoverDebug" class="font-semibold text-gray-300">Hover Debug:</label><input type="checkbox" id="hoverDebug" class="accent-cyan-500 h-5 w-5"></div>
-                    <button id="regenButton" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">New Island</button>
+                    <button id="regenButton" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center">New Island</button>
                 </div>
             </div>
 
             <div id="terrain-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel">
                 <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Terrain Legend</h3>
                 <div class="grid grid-cols-2 gap-2 text-sm">
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #003366;"></div><span>Deep Ocean</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #006699;"></div><span>Ocean</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #E0D5A3;"></div><span>Beach</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #55a630;"></div><span>Lowlands</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #2b9348;"></div><span>Hills</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #0d370d;"></div><span>Forest</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #808080;"></div><span>Mountain</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #B0B0B0;"></div><span>Peak</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
-                     <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #aed6f1;"></div><span>Ice</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #003366;"></div><span>Deep Ocean</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #006699;"></div><span>Ocean</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #E0D5A3;"></div><span>Beach</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #55a630;"></div><span>Lowlands</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #2b9348;"></div><span>Hills</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #0d370d;"></div><span>Forest</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #808080;"></div><span>Mountain</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #B0B0B0;"></div><span>Peak</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #aed6f1;"></div><span>Ice</span></div>
                 </div>
             </div>
             <div id="temp-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
@@ -144,6 +150,7 @@
     </div>
 
 <script>
+    // --- DOM ELEMENT REFERENCES ---
     const canvas = document.getElementById('mapCanvas');
     const ctx = canvas.getContext('2d');
     const dayEl = document.getElementById('day');
@@ -162,40 +169,46 @@
     const hoverDebugCheckbox = document.getElementById('hoverDebug');
     const tooltipEl = document.getElementById('tooltip');
 
+    // --- MAP & SIMULATION CONSTANTS ---
     const MAP_WIDTH = 200;
     const MAP_HEIGHT = 100;
+    const CHUNK_SIZE = 16; // For optimizing water flow calculations
+    const YEAR_LENGTH = 365;
+    const TEMP_AVG = 12.5; // Average yearly temperature
+    const TEMP_AMPLITUDE = 17.5; // Seasonal temperature variation
 
-    const CHUNK_SIZE = 16;
-    let activeChunks = new Set();
-
+    // --- VIEWPORT & RENDERING STATE ---
     let view = { zoom: 4, offsetX: 0, offsetY: 0, isPanning: false, panStart: { x: 0, y: 0 } };
-    
     const offscreenCanvas = document.createElement('canvas');
     offscreenCanvas.width = MAP_WIDTH;
     offscreenCanvas.height = MAP_HEIGHT;
     const offscreenCtx = offscreenCanvas.getContext('2d');
-    let staticMapDirty = true;
+    let staticMapDirty = true; // Flag to redraw the static parts of the map (terrain)
 
+    // --- SIMULATION STATE ---
     let day = 1;
     let simulationInterval;
     let terrainNoise = new SimplexNoise();
     let weatherNoise = new SimplexNoise(Math.random());
     let cloudOffsetX = Math.random() * 1000;
     let lastSeason = '';
+    let activeChunks = new Set(); // Stores chunks with active water flow for optimization
     
+    // --- DATA MAPS ---
     let elevationMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
     let temperatureMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
     let cloudMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
     let snowMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
     let waterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
-    let riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0)); // 0: none, 1: river, 2: lake
     let iceMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
-    let salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0)); // 0.0 to 1.0
     let forestMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
     let vegetationHealthMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(1.0));
     let annualPrecipitationMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
-    let islandTiles = []; 
+    let islandTiles = []; // Cache of all land tiles for faster iteration
     
+    // --- BIOME DEFINITIONS ---
     const BIOMES = {
         DEEP_OCEAN: { name: 'Deep Ocean', threshold: 0.3, color: [0, 51, 102], resistance: 1000 },
         OCEAN: { name: 'Ocean', threshold: 0.45, color: [0, 102, 153], resistance: 1000 },
@@ -205,14 +218,13 @@
         MOUNTAIN: { name: 'Mountain', threshold: 0.95, color: [128, 128, 128], resistance: 100 },
         PEAK: { name: 'Peak', threshold: 1.0, color: [176, 176, 176], resistance: 200 },
     };
-    const YEAR_LENGTH = 365;
-    const TEMP_AVG = 12.5;
-    const TEMP_AMPLITUDE = 17.5;
     
+    // --- COLOR PALETTES FOR SEASONS ---
     const AUTUMN_FOREST_COLORS = [[217, 95, 2], [253, 141, 60], [230, 85, 13], [166, 54, 3]];
     const AUTUMN_GRASS_COLORS = [[255, 224, 130], [255, 214, 100], [240, 200, 90], [220, 180, 80]];
     const DROUGHT_COLOR = [189, 178, 133];
 
+    // --- UTILITY FUNCTIONS ---
     function lerpColor(color1, color2, factor) {
         if (!color1 || !color2) return [0,0,0]; 
         factor = Math.max(0, Math.min(1, factor));
@@ -259,6 +271,7 @@
         
         let seasonalColor = lerpColor(fromColor, toColor, progress);
         
+        // Apply drought effect
         const health = vegetationHealthMap[y][x];
         if (health < 1.0) {
             seasonalColor = lerpColor(DROUGHT_COLOR, seasonalColor, health);
@@ -267,6 +280,11 @@
         return `rgb(${Math.floor(seasonalColor[0])}, ${Math.floor(seasonalColor[1])}, ${Math.floor(seasonalColor[2])})`;
     }
 
+    // --- MAP GENERATION PIPELINE ---
+
+    /**
+     * Initializes salinity map: 1.0 for oceans, 0.0 for rivers, and diffuses the values.
+     */
     function initializeSalinity() {
         salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
         for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -275,13 +293,14 @@
                 else if (riverMap[y][x] > 0) salinityMap[y][x] = 0.0;
             }
         }
+        // Diffuse salinity for a more gradual transition
         for (let i = 0; i < 5; i++) {
             let nextSalinityMap = salinityMap.map(arr => arr.slice());
             for (let y = 0; y < MAP_HEIGHT; y++) {
                 for (let x = 0; x < MAP_WIDTH; x++) {
                     if (riverMap[y][x] > 0) continue;
                     let neighborSum = 0, neighborCount = 0;
-                     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
                         const nx = x + dx, ny = y + dy;
                         if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
                             neighborSum += salinityMap[ny][nx];
@@ -295,12 +314,16 @@
         }
     }
 
+    /**
+     * Finds depressions in the terrain, fills them to create lakes, and carves river paths from lake outlets down to the sea.
+     */
     function generateRiversAndLakes() {
         riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
         let lakeOutlets = [];
         const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
         const basinThreshold = BIOMES.HILLS.threshold;
 
+        // Step 1: Find and fill basins to create lakes
         for (let y = 0; y < MAP_HEIGHT; y++) {
             for (let x = 0; x < MAP_WIDTH; x++) {
                 if (!visited[y][x] && elevationMap[y][x] >= basinThreshold) {
@@ -327,23 +350,24 @@
                             }
                         }
                     }
-                    if (basinCells.length < 5) continue;
+                    if (basinCells.length < 5) continue; // Ignore tiny basins
                     for(const bCell of boundaryCells.values()) if(elevationMap[bCell.y][bCell.x] < lowestOutlet.elevation) lowestOutlet = { x: bCell.x, y: bCell.y, elevation: elevationMap[bCell.y][bCell.x] };
                     if (lowestOutlet.x !== -1) {
-                         for(const basinCell of basinCells) if(elevationMap[basinCell.y][basinCell.x] < lowestOutlet.elevation) {
-                            riverMap[basinCell.y][basinCell.x] = 2; 
-                            elevationMap[basinCell.y][basinCell.x] = lowestOutlet.elevation;
-                         }
-                         lakeOutlets.push({x: lowestOutlet.x, y: lowestOutlet.y});
+                          for(const basinCell of basinCells) if(elevationMap[basinCell.y][basinCell.x] < lowestOutlet.elevation) {
+                            riverMap[basinCell.y][basinCell.x] = 2; // Mark as lake
+                            elevationMap[basinCell.y][basinCell.x] = lowestOutlet.elevation; // Fill basin to outlet level
+                          }
+                          lakeOutlets.push({x: lowestOutlet.x, y: lowestOutlet.y});
                     }
                 }
             }
         }
         
+        // Step 2: Carve rivers from lake outlets downhill
         for (const startPoint of lakeOutlets) {
             let cx = startPoint.x, cy = startPoint.y;
             for (let len = 0; len < 1000; len++) {
-                if (riverMap[cy][cx] === 0) riverMap[cy][cx] = 1;
+                if (riverMap[cy][cx] === 0) riverMap[cy][cx] = 1; // Mark as river
                 if (elevationMap[cy][cx] <= BIOMES.OCEAN.threshold) break;
                 let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[cy][cx] };
                 for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -358,7 +382,10 @@
             }
         }
     }
-
+    
+    /**
+     * Finds suitable locations for forests based on elevation and slope, then grows them.
+     */
     function preGrowForests() {
         forestMap.forEach(row => row.fill(0));
         const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
@@ -391,11 +418,15 @@
                             const isHabitable = elevation > BIOMES.LOWLANDS.threshold * 0.95 && elevation < BIOMES.MOUNTAIN.threshold;
                             if (isHabitable) {
                                 suitability = 0.5;
+                                // Favor west-facing slopes (windward side)
                                 if (tx > 0) {
                                     const slope = elevation - elevationMap[ty][tx - 1];
                                     if (slope > 0.01) suitability += slope * 15;
                                 }
-                                if (tx < MAP_WIDTH - 1 && Math.abs(elevation - elevationMap[ty][tx + 1]) > 0.1) suitability = 0;
+                                // Gently penalize ridge tops (steep drops to the east)
+                                if (tx < MAP_WIDTH - 1) {
+                                    suitability -= Math.max(0, Math.abs(elevation - elevationMap[ty][tx+1]) - 0.05) * 2;
+                                }
                             }
                             if(suitability > 0) {
                                 suitabilityMap.set(`${tx},${ty}`, suitability);
@@ -403,7 +434,7 @@
                                 if (suitability > maxSuitability) maxSuitability = suitability;
                             }
                         }
-                        const seedSpots = potentialSpots.filter(s => s.suitability > maxSuitability * 0.5);
+                        const seedSpots = potentialSpots.filter(s => s.suitability > maxSuitability * 0.3);
                         for(const spot of seedSpots) {
                             if(forestMap[spot.y][spot.x] > 0.5) continue;
                             const forestQueue = [{ x: spot.x, y: spot.y, density: 1.0 }];
@@ -436,7 +467,10 @@
             }
         }
     }
-
+    
+    /**
+     * Runs a fast, simplified hydraulic erosion simulation to carve out riverbeds before the main simulation starts.
+     */
     function preErode() {
         const PRE_SIM_STEPS = 5000;
         const PRE_SIM_EROSION_RATE = 0.0001;
@@ -487,6 +521,9 @@
         }
     }
 
+    /**
+     * Main function to orchestrate the entire map generation process.
+     */
     function generateMap() {
         terrainNoise = new SimplexNoise();
         const frequency = 5.0 / MAP_WIDTH;
@@ -494,6 +531,7 @@
         const persistence = 0.55; 
         islandTiles = [];
 
+        // Step 1: Generate base elevation with noise and an island mask
         for (let y = 0; y < MAP_HEIGHT; y++) {
             for (let x = 0; x < MAP_WIDTH; x++) {
                 let noiseValue = 0; let amp = 1; let freq = frequency;
@@ -503,6 +541,7 @@
                 }
                 noiseValue = (noiseValue + 1) / 2;
                 
+                // Create a circular falloff to form an island shape
                 const dx = x - MAP_WIDTH / 2; const dy = y - MAP_HEIGHT / 2;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 const maxDist = Math.sqrt(Math.pow(MAP_WIDTH / 2, 2) + Math.pow(MAP_HEIGHT / 2, 2));
@@ -515,24 +554,26 @@
             }
         }
         
+        // Step 2: Run generation pipeline
         generateRiversAndLakes();
         preErode();
-        generateRiversAndLakes();
+        generateRiversAndLakes(); // Re-run to account for erosion changes
         initializeSalinity();
         preGrowForests();
         
+        // Step 3: Reset dynamic simulation maps
         [snowMap, waterMap, iceMap, annualPrecipitationMap, cloudMap, temperatureMap].forEach(m => m.forEach(r => r.fill(0)));
         vegetationHealthMap.forEach(r => r.fill(1.0));
         activeChunks.clear();
         for(let y = 0; y < MAP_HEIGHT; y++) for(let x = 0; x < MAP_WIDTH; x++) {
-            if(riverMap[y][x] > 0) {
+            if(riverMap[y][x] > 0) { // Activate chunks with rivers/lakes initially
                 const chunkX = Math.floor(x / CHUNK_SIZE);
                 const chunkY = Math.floor(y / CHUNK_SIZE);
                 activeChunks.add(`${chunkX},${chunkY}`);
             }
         }
         
-        staticMapDirty = true;
+        staticMapDirty = true; // Mark map for a full redraw
     }
 
     function getBiome(elevation) {
@@ -542,6 +583,11 @@
         return BIOMES.PEAK;
     }
     
+    // --- DRAWING & RENDERING ---
+    
+    /**
+     * Renders the static elements of the map (terrain, hillshade, forests, rivers) to an offscreen buffer for performance.
+     */
     function drawStaticMapToOffscreenBuffer() {
         const dayOfYear = (day - 1) % YEAR_LENGTH;
         for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -556,6 +602,21 @@
                 
                 offscreenCtx.fillStyle = color;
                 offscreenCtx.fillRect(x, y, 1, 1);
+
+                // Add hillshading for a 3D effect on land
+                if (viewModeSelect.value === 'terrain' && elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    const leftElevation = x > 0 ? elevationMap[y][x - 1] : elevationMap[y][x];
+                    const topElevation = y > 0 ? elevationMap[y - 1][x] : elevationMap[y][x];
+                    const slopeX = (elevationMap[y][x] - leftElevation) * 100;
+                    const slopeY = (elevationMap[y][x] - topElevation) * 100;
+                    const shade = (slopeX * -1 + slopeY * -1) * 1.5; // Light from northwest
+                    if (shade > 0) { // Highlight
+                        offscreenCtx.fillStyle = `rgba(255, 255, 255, ${Math.min(shade / 255, 0.1)})`;
+                    } else { // Shadow
+                        offscreenCtx.fillStyle = `rgba(0, 0, 0, ${Math.min(Math.abs(shade) / 255, 0.25)})`;
+                    }
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
                 
                 if (forestMap[y][x] > 0.1) {
                     offscreenCtx.fillStyle = `rgba(13, 55, 13, ${Math.min(forestMap[y][x] * 0.9, 0.85)})`;
@@ -572,6 +633,9 @@
         }
     }
 
+    /**
+     * The main draw function, called every frame. Renders the offscreen buffer and dynamic overlays (weather, snow, etc.).
+     */
     function drawMap() {
         if(staticMapDirty) {
             drawStaticMapToOffscreenBuffer();
@@ -598,16 +662,17 @@
                 const renderHeight = nextScreenY - screenY;
                 if (renderWidth <= 0 || renderHeight <= 0) continue;
 
+                // --- RENDER VIEW MODES ---
                 if (viewMode === 'temp') {
-                     const temp = temperatureMap[y][x];
-                     const clampedTemp = Math.max(-10, Math.min(40, temp));
-                     const percent = (clampedTemp + 10) / 50; 
-                     let r, g, b;
-                     if (percent < 0.33) { const p = percent / 0.33; r = 0; g = 255 * p; b = 255 * (1 - p); } 
-                     else if (percent < 0.66) { const p = (percent - 0.33) / 0.33; r = 255 * p; g = 255; b = 0; } 
-                     else { const p = (percent - 0.66) / 0.34; r = 255; g = 255 * (1 - p); b = 0;}
-                     ctx.fillStyle = `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
-                     ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                    const temp = temperatureMap[y][x];
+                    const clampedTemp = Math.max(-10, Math.min(40, temp));
+                    const percent = (clampedTemp + 10) / 50; 
+                    let r, g, b;
+                    if (percent < 0.33) { const p = percent / 0.33; r = 0; g = 255 * p; b = 255 * (1 - p); } 
+                    else if (percent < 0.66) { const p = (percent - 0.33) / 0.33; r = 255 * p; g = 255; b = 0; } 
+                    else { const p = (percent - 0.66) / 0.34; r = 255; g = 255 * (1 - p); b = 0;}
+                    ctx.fillStyle = `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
                 } else if (viewMode === 'flow') {
                     const waterAmount = waterMap[y][x] + (riverMap[y][x] > 0 ? 0.1 : 0);
                     const saturation = Math.min(waterAmount * 2, 1);
@@ -620,23 +685,25 @@
                     ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
                 }
                 
+                // --- RENDER DYNAMIC OVERLAYS ---
                 if (viewMode === 'terrain' || viewMode === 'weather') {
-                     if (riverMap[y][x] === 1) {
-                         const riverAlpha = Math.min(0.3 + waterMap[y][x] * 3.0, 1.0);
-                         if(riverAlpha > 0.31){
+                    // Widen rivers based on water content
+                    if (riverMap[y][x] === 1) {
+                        const riverAlpha = Math.min(0.3 + waterMap[y][x] * 3.0, 1.0);
+                        if(riverAlpha > 0.31){
                             const ceilZoom = Math.ceil(view.zoom);
                             const riverWidthBonus = Math.min(waterMap[y][x] * 20, ceilZoom * 0.8);
                             ctx.fillStyle = `rgba(82, 172, 229, ${riverAlpha})`;
                             ctx.fillRect(screenX - riverWidthBonus / 2, screenY - riverWidthBonus/2, renderWidth + riverWidthBonus, renderHeight + riverWidthBonus);
-                         }
+                        }
                     }
 
                     if (waterMap[y][x] > 0.1 && riverMap[y][x] === 0) {
-                         ctx.fillStyle = `rgba(82, 172, 229, ${Math.min(waterMap[y][x] / 2.0, 0.7)})`;
-                         ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                        ctx.fillStyle = `rgba(82, 172, 229, ${Math.min(waterMap[y][x] / 2.0, 0.7)})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
                     }
-                    if (snowMap[y][x] > 0.01) {
-                        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.6 + snowMap[y][x] / 2.0, 1.0)})`;
+                    if (snowMap[y][x] > 0.005) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.4 + snowMap[y][x] * 2.0, 1.0)})`;
                         ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
                     }
                 }
@@ -651,7 +718,7 @@
                     if (cloudDensity > 0.55) {
                         ctx.fillStyle = `rgba(255, 255, 255, ${Math.min((cloudDensity - 0.55) * 2, 0.7)})`;
                         ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
-                        if (cloudDensity > 0.85) {
+                        if (cloudDensity > 0.85) { // Precipitation
                             ctx.fillStyle = temperatureMap[y][x] <= 0 ? 'rgba(220, 220, 255, 0.7)' : 'rgba(100, 150, 255, 0.6)';
                             ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
                         }
@@ -660,7 +727,9 @@
             }
         }
     }
-
+    
+    // --- SIMULATION UPDATE LOGIC ---
+    
     function updateWeather() {
         const dayOfYear = (day - 1) % YEAR_LENGTH;
         const yearlyBaseTemp = TEMP_AVG - Math.cos((dayOfYear / YEAR_LENGTH) * 2 * Math.PI) * TEMP_AMPLITUDE;
@@ -671,7 +740,7 @@
                 let temp = yearlyBaseTemp;
                 if (elevation > BIOMES.OCEAN.threshold) { 
                     const landElevation = (elevation - BIOMES.OCEAN.threshold) / (1 - BIOMES.OCEAN.threshold);
-                    temp -= landElevation * 25;
+                    temp -= landElevation * 25; // Temperature decreases with altitude
                 }
                 const weatherFluctuation = weatherNoise.noise3D(x / 20, y / 20, day / 10) * 4;
                 temp += weatherFluctuation;
@@ -688,6 +757,7 @@
 
     function updateCloudsAndWeather() {
         cloudOffsetX += 0.015;
+
         const cloudFreq = 5.0 / MAP_WIDTH;
         const windEffectFactor = 8.0, rainShadowFactor = 12.0, peakClearFactor = 1.5;
         let moistureMap = Array(MAP_HEIGHT).fill(1.0);
@@ -702,18 +772,20 @@
                 let topoEffect = 0;
                  if (currentElevation > BIOMES.OCEAN.threshold) {
                     const upwindElevation = (x > 0) ? elevationMap[y][x - 1] : currentElevation;
+
                     const slope = (currentElevation - upwindElevation) * 15;
-                    if (slope > 0) topoEffect = slope * windEffectFactor;
-                    else topoEffect = slope * rainShadowFactor;
+                    if (slope > 0) topoEffect = slope * windEffectFactor; // Orographic lift on west-facing slopes
+                    else topoEffect = slope * rainShadowFactor; // Rain shadow on east-facing slopes
                     if (currentElevation > BIOMES.MOUNTAIN.threshold) {
                         const peakEffect = (currentElevation - BIOMES.MOUNTAIN.threshold) / (1.0 - BIOMES.MOUNTAIN.threshold);
-                        topoEffect -= peakEffect * peakClearFactor;
+                        topoEffect -= peakEffect * peakClearFactor; // Peaks are often clear of clouds
                     }
                 }
                 let baseDensity = ((weatherNoise.noise2D((x * cloudFreq) + cloudOffsetX, y * cloudFreq) + 1) / 2) * moistureMap[y] * (1 - tempCloudReduction);
                 cloudMap[y][x] = Math.max(0, Math.min(1, baseDensity + (topoEffect / 100)));
+                
                 if (cloudMap[y][x] > 0.85) moistureMap[y] *= 0.4;
-                else moistureMap[y] = Math.min(1.0, moistureMap[y] + 0.02);
+                else moistureMap[y] = Math.min(1.0, moistureMap[y] + 0.02); // Replenish moisture
             }
         }
         const avgCloudiness = islandTiles.length > 0 ? islandTiles.reduce((sum, t) => sum + cloudMap[t.y][t.x], 0) / islandTiles.length : 0;
@@ -728,6 +800,7 @@
         for (let y = 0; y < MAP_HEIGHT; y++) {
             for (let x = 0; x < MAP_WIDTH; x++) {
                 const temp = temperatureMap[y][x];
+                // Snow melt
                 if (temp > 0 && snowMap[y][x] > 0) {
                     const meltAmount = temp * meltRate * 0.1;
                     const actualMelt = Math.min(snowMap[y][x], meltAmount);
@@ -738,11 +811,12 @@
                         activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
                     }
                 }
+                // Precipitation
                 if (cloudMap[y][x] > 0.85 && elevationMap[y][x] > BIOMES.OCEAN.threshold) {
-                    if (temp <= 0) {
+                    if (temp <= 0) { // Snow
                         snowMap[y][x] = Math.min(maxSnowDepth, snowMap[y][x] + accumulationRate);
                         annualPrecipitationMap[y][x] += accumulationRate;
-                    } else {
+                    } else { // Rain
                         waterMap[y][x] += rainAmount;
                         annualPrecipitationMap[y][x] += rainAmount;
                         activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
@@ -778,7 +852,7 @@
                 }
             } else if (forestMap[y][x] > 0) { forestMap[y][x] = Math.max(0.0, forestMap[y][x] - declineRate); forestDirty = true; }
         }
-        annualPrecipitationMap.forEach(r => r.fill(0));
+        annualPrecipitationMap.forEach(r => r.fill(0)); // Reset for next year
         if(forestDirty) staticMapDirty = true;
     }
 
@@ -792,8 +866,8 @@
             for(let x=0; x<MAP_WIDTH; x++) {
                 if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] > 0) {
                     const temp = temperatureMap[y][x], salinity = salinityMap[y][x];
-                    const freezePoint = 0.0 - (salinity * 2.0);
-                    const canOceanFreeze = salinity > 0.8 && averageWorldTemp <= -10;
+                    const freezePoint = 0.0 - (salinity * 2.0); // Saltwater freezes at a lower temp
+                    const canOceanFreeze = salinity > 0.8 && averageWorldTemp <= -10; // Only freeze ocean in extreme cold
                     if(temp < freezePoint && (salinity <= 0.8 || canOceanFreeze)) {
                         iceMap[y][x] = Math.min(maxIce, iceMap[y][x] + (freezePoint - temp) * freezeRate);
                     } else if (temp > freezePoint && iceMap[y][x] > 0) {
@@ -815,7 +889,7 @@
 
             for(let y = startY; y < endY; y++) {
                 for(let x = startX; x < endX; x++) {
-                     if (riverMap[y][x] === 1 && waterMap[y][x] > 0.1) {
+                    if (riverMap[y][x] === 1 && waterMap[y][x] > 0.1) {
                         let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[y][x] };
                         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
                             if(dx === 0 && dy === 0) continue;
@@ -853,9 +927,9 @@
                     const water = waterMap[y][x];
                     let health = vegetationHealthMap[y][x];
                     
-                    if(water > 0.01) health = Math.min(1.0, health + 0.1);
-                    if(temp > 30) health = Math.max(0.0, health - 0.05);
-                    else if(health < 1.0 && temp < 25) health = Math.min(1.0, health + 0.01);
+                    if(water > 0.01) health = Math.min(1.0, health + 0.1); // Recover with water
+                    if(temp > 30) health = Math.max(0.0, health - 0.05); // Stress from heat
+                    else if(health < 1.0 && temp < 25) health = Math.min(1.0, health + 0.01); // Slowly recover
                     
                     if(vegetationHealthMap[y][x] !== health) {
                         vegetationHealthMap[y][x] = health;
@@ -871,6 +945,7 @@
         const flowSpeed = 0.5, riverPersistence = 10.0, riverSeepage = 0.005;
         let waterFromNeighbors = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
         let nextActiveChunks = new Set();
+        // Only iterate over chunks that have water
         for (const chunkKey of activeChunks) {
             const [chunkX, chunkY] = chunkKey.split(',').map(Number);
             const startX = chunkX * CHUNK_SIZE, startY = chunkY * CHUNK_SIZE;
@@ -906,12 +981,13 @@
                 }
             }
         }
+        // Apply evaporation and update water map
         for (let y = 0; y < MAP_HEIGHT; y++) {
             for (let x = 0; x < MAP_WIDTH; x++) {
                 let currentWater = waterFromNeighbors[y][x];
                 if (currentWater <= 0.001) { waterMap[y][x] = 0; continue; }
                 const isRiver = riverMap[y][x] === 1;
-                if(isRiver) currentWater += riverSeepage;
+                if(isRiver) currentWater += riverSeepage; // Rivers get some groundwater
                 
                 const temp = temperatureMap[y][x];
                 let baseEvaporation = 0.02;
@@ -920,7 +996,7 @@
                 const evaporationRate = isRiver ? baseEvaporation / riverPersistence : baseEvaporation;
                 currentWater *= (1 - evaporationRate);
 
-                if (riverMap[y][x] === 2 && iceMap[y][x] > 0.2) {
+                if (riverMap[y][x] === 2 && iceMap[y][x] > 0.2) { // Ice on lakes reduces evaporation
                      currentWater *= (1 - (baseEvaporation * (iceMap[y][x] / 4.0)));
                 }
                 waterMap[y][x] = Math.max(0, currentWater);
@@ -932,17 +1008,22 @@
         activeChunks = nextActiveChunks;
     }
 
+    // --- MAIN SIMULATION & RENDER LOOPS ---
+
     function simulationTick() {
         day++;
         const currentSeason = getSeasonName();
+        // Run all simulation updates for the day
         updateWeather();
         updateCloudsAndWeather();
         updateSurfaceWater();
         updateVegetationHealth();
         updateIce();
         updateWaterFlow();
-        if(day % 30 === 0) updateErosion();
-        if (day % YEAR_LENGTH === 0) updateEcology();
+        if(day % 30 === 0) updateErosion(); // Slower geological changes
+        if (day % YEAR_LENGTH === 0) updateEcology(); // Yearly ecological changes
+        
+        // Update UI
         dayEl.textContent = day;
         seasonEl.textContent = currentSeason;
     }
@@ -957,6 +1038,7 @@
 
     function renderLoop() {
         const currentSeason = getSeasonName();
+        // Trigger a redraw of the terrain if the season changes (for colors)
         if (currentSeason !== lastSeason || day % 5 === 0) {
              staticMapDirty = true;
              lastSeason = currentSeason;
@@ -964,10 +1046,13 @@
         drawMap();
         requestAnimationFrame(renderLoop);
     }
+    
+    // --- EVENT LISTENERS & INITIALIZATION ---
 
     function handleResize() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        // Center map on resize
         view.offsetX = (canvas.width - MAP_WIDTH * view.zoom) / 2;
         view.offsetY = (canvas.height - MAP_HEIGHT * view.zoom) / 2;
     }
@@ -983,18 +1068,37 @@
         tempLegend.classList.toggle('hidden', viewModeSelect.value !== 'temp');
         weatherLegend.classList.toggle('hidden', viewModeSelect.value !== 'weather');
         flowLegend.classList.toggle('hidden', viewModeSelect.value !== 'flow');
+        staticMapDirty = true; // Redraw for hillshading changes
     }
     
     speedSlider.addEventListener('input', setupSimulation);
     viewModeSelect.addEventListener('change', changeView);
     regenButton.addEventListener('click', () => {
-        day = 1;
-        lastSeason = '';
-        generateMap();
+        regenButton.disabled = true;
+        regenButton.innerHTML = `
+            <div class="flex items-center justify-center">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generating...
+            </div>`;
+
+        setTimeout(() => {
+            day = 1;
+            lastSeason = '';
+            generateMap();
+            regenButton.disabled = false;
+            regenButton.textContent = 'New Island';
+        }, 10);
     });
-    toggleUiButton.addEventListener('click', () => { uiOverlay.classList.toggle('visible'); });
+    toggleUiButton.addEventListener('click', () => { 
+        uiOverlay.classList.toggle('visible');
+        toggleUiButton.classList.toggle('ui-open');
+    });
     hoverDebugCheckbox.addEventListener('change', () => { if (!hoverDebugCheckbox.checked) tooltipEl.classList.add('hidden');});
 
+    // --- Canvas Interaction: Zoom & Pan ---
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -1052,8 +1156,18 @@
                         <span>Salinity:</span><span>${salinityMap[mapY][mapX].toFixed(2)}</span>
                         <span>Forest:</span><span>${(forestMap[mapY][mapX] * 100).toFixed(0)}%</span>
                     </div>`;
+                
                 tooltipEl.style.left = `${e.clientX + 15}px`;
                 tooltipEl.style.top = `${e.clientY + 15}px`;
+
+                // Keep tooltip within viewport
+                const tooltipRect = tooltipEl.getBoundingClientRect();
+                if (tooltipRect.right > window.innerWidth) {
+                    tooltipEl.style.left = `${e.clientX - tooltipRect.width - 15}px`;
+                }
+                if (tooltipRect.bottom > window.innerHeight) {
+                    tooltipEl.style.top = `${e.clientY - tooltipRect.height - 15}px`;
+                }
                 tooltipEl.classList.remove('hidden');
             } else {
                 tooltipEl.classList.add('hidden');
@@ -1063,6 +1177,7 @@
     
     window.addEventListener('resize', handleResize);
     
+    // --- START ---
     generateMap();
     handleResize();
     setupSimulation();
@@ -1073,4 +1188,3 @@
 
 </body>
 </html>
-
