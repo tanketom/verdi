@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Island Topography and Weather Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+        }
+        #mapCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        #ui-overlay {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            width: 300px;
+            max-height: calc(100vh - 2rem);
+            overflow-y: auto;
+            z-index: 10;
+            background-color: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            transform: translateX(100%);
+            opacity: 0;
+            visibility: hidden;
+        }
+        #ui-overlay.visible {
+            transform: translateX(0);
+            opacity: 1;
+            visibility: visible;
+        }
+        #toggle-ui-button {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 11;
+            background-color: rgba(31, 41, 55, 0.8);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.5s ease-in-out;
+        }
+        #ui-overlay.visible + #toggle-ui-button {
+            transform: translateX(-316px);
+        }
+        #regenButton .spinner { display: none; }
+        #regenButton.loading .spinner { display: inline-block; }
+        #regenButton.loading .button-text { display: none; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <canvas id="mapCanvas"></canvas>
+
+    <div id="tooltip" class="hidden fixed z-20 p-3 bg-gray-900/80 text-white text-xs rounded-lg shadow-lg pointer-events-none font-mono" style="backdrop-filter: blur(5px);"></div>
+
+    <div id="ui-overlay">
+        <div class="w-full">
+            <h1 class="text-xl font-bold text-center mb-4 text-cyan-300">Island Simulation</h1>
+            
+            <div class="bg-gray-700/50 rounded-lg p-4 info-panel">
+                <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2 text-cyan-400">Simulation Status</h2>
+                <div class="space-y-3">
+                    <div><span class="font-bold text-gray-300">Day:</span><span id="day" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">1</span></div>
+                    <div><span class="font-bold text-gray-300">Season:</span><span id="season" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">Spring</span></div>
+                    <div><span class="font-bold text-gray-300">Weather:</span><span id="weather" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">Clear</span></div>
+                    <div><span class="font-bold text-gray-300">Avg. Temp:</span><span id="avgTemp" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">15°C</span></div>
+                </div>
+            </div>
+
+            <div id="ecosystem-panel" class="bg-gray-700/50 rounded-lg p-4 mt-6 info-panel">
+                <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2 text-cyan-400">Ecosystem</h2>
+                <div class="space-y-3">
+                    <div><span class="font-bold text-gray-300">Deer:</span><span id="deer-pop" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                    <div><span class="font-bold text-gray-300">Wolves:</span><span id="wolf-pop" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                    <div><span class="font-bold text-gray-300">Seagulls:</span><span id="seagull-pop" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                    <div><span class="font-bold text-gray-300">Seals:</span><span id="seal-pop" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                    <div><span class="font-bold text-gray-300">Mackerel:</span><span id="mackerel-pop" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                </div>
+            </div>
+
+            <div class="bg-gray-700/50 rounded-lg p-4 mt-6 info-panel">
+                <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2 text-cyan-400">Controls</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between"><label for="speed" class="font-semibold text-gray-300">Sim Speed:</label><input type="range" id="speed" min="1" max="50" value="10" class="w-2/3 accent-cyan-500"></div>
+                    <div class="flex items-center justify-between"><label for="viewMode" class="font-semibold text-gray-300">View:</label><select id="viewMode" class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 w-2/3"><option value="terrain">Terrain</option><option value="fauna">Fauna</option><option value="temp">Temperature</option><option value="weather">Weather</option><option value="flow">Water Flow</option><option value="groundwater">Groundwater</option><option value="currents">Ocean Current</option></select></div>
+                    <div class="flex items-center justify-between"><label for="oceanCurrent" class="font-semibold text-gray-300">Ocean Current:</label><select id="oceanCurrent" class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 w-2/3"><option value="warm">Warm</option><option value="cold">Cold</option><option value="none">None</option></select></div>
+                    <div class="flex items-center justify-between"><label for="hoverDebug" class="font-semibold text-gray-300">Hover Debug:</label><input type="checkbox" id="hoverDebug" class="accent-cyan-500 h-5 w-5"></div>
+                    <button id="regenButton" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center">
+                        <svg class="spinner animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span class="button-text">New Island</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="terrain-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Terrain Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #003366;"></div><span>Deep Ocean</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #006699;"></div><span>Ocean</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #E0D5A3;"></div><span>Beach</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #55a630;"></div><span>Lowlands</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #2b9348;"></div><span>Hills</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #0d370d;"></div><span>Forest</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #808080;"></div><span>Mountain</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #B0B0B0;"></div><span>Peak</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #aed6f1;"></div><span>Ice</span></div>
+                </div>
+            </div>
+             <div id="fauna-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Fauna Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded-full" style="background-color: #a0522d;"></div><span>Deer</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded-full" style="background-color: #6c757d;"></div><span>Wolf</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded-full" style="background-color: #e0e0e0;"></div><span>Seagull</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded-full" style="background-color: #bdc3c7;"></div><span>Seal</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded-full" style="background-color: #3498db;"></div><span>Mackerel</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(0, 255, 0, 0.2);"></div><span>Habitat</span></div>
+                </div>
+            </div>
+            <div id="temp-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Temperature Legend (°C)</h3>
+                <div class="flex justify-center items-center space-x-2 text-sm text-center"><span class="font-mono">&lt;-10</span><div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #00ffff, #00ff00, #ffff00, #ff8000, #ff0000);"></div><span class="font-mono">40+</span></div>
+            </div>
+            <div id="weather-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Weather Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(255,255,255,0.4);"></div><span>Clouds</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(100, 150, 255, 0.6);"></div><span>Rainfall</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(220, 220, 255, 0.7);"></div><span>Snowfall</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(255, 255, 255, 0.6);"></div><span>Snow Cover</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(52, 152, 219, 0.5);"></div><span>Surface Water</span></div>
+                </div>
+                <div class="flex items-center space-x-2 text-sm text-center mt-2"><span>Cloud Density:</span><div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #222, #fff);"></div></div>
+            </div>
+            <div id="flow-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Water Flow Legend</h3>
+                <div class="flex justify-center items-center space-x-2 text-sm text-center">
+                    <span class="font-mono">Dry</span>
+                    <div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #333, #3498db, #87CEEB);"></div>
+                    <span class="font-mono">Saturated</span>
+                </div>
+            </div>
+             <div id="groundwater-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Groundwater Legend</h3>
+                <div class="flex justify-center items-center space-x-2 text-sm text-center">
+                    <span class="font-mono">Dry</span>
+                    <div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #a16a2d, #5289ad, #3498db);"></div>
+                    <span class="font-mono">Saturated</span>
+                </div>
+            </div>
+             <div id="currents-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Ocean Current Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #ff6b6b;"></div><span>Warm Current</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #4db8ff;"></div><span>Cold Current</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <button id="toggle-ui-button" title="Toggle UI panels">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+    </button>
+
+<script>
+    // --- DOM ELEMENT REFERENCES ---
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+    const dayEl = document.getElementById('day');
+    const seasonEl = document.getElementById('season');
+    const weatherEl = document.getElementById('weather');
+    const avgTempEl = document.getElementById('avgTemp');
+    const deerPopEl = document.getElementById('deer-pop');
+    const wolfPopEl = document.getElementById('wolf-pop');
+    const puffinPopEl = document.getElementById('seagull-pop');
+    const sealPopEl = document.getElementById('seal-pop');
+    const mackerelPopEl = document.getElementById('mackerel-pop');
+    const speedSlider = document.getElementById('speed');
+    const viewModeSelect = document.getElementById('viewMode');
+    const oceanCurrentSelect = document.getElementById('oceanCurrent');
+    const regenButton = document.getElementById('regenButton');
+    const terrainLegend = document.getElementById('terrain-legend');
+    const faunaLegend = document.getElementById('fauna-legend');
+    const tempLegend = document.getElementById('temp-legend');
+    const weatherLegend = document.getElementById('weather-legend');
+    const flowLegend = document.getElementById('flow-legend');
+    const groundwaterLegend = document.getElementById('groundwater-legend');
+    const currentsLegend = document.getElementById('currents-legend');
+    const uiOverlay = document.getElementById('ui-overlay');
+    const toggleUiButton = document.getElementById('toggle-ui-button');
+    const hoverDebugCheckbox = document.getElementById('hoverDebug');
+    const tooltipEl = document.getElementById('tooltip');
+
+    // --- CONSTANTS & CONFIG ---
+    const MAP_WIDTH = 200;
+    const MAP_HEIGHT = 100;
+    const CHUNK_SIZE = 16;
+    const YEAR_LENGTH = 365;
+    const TEMP_AVG = 12.5;
+    const TEMP_AMPLITUDE = 17.5; 
+    const DEER_START_POP = 50;
+    const WOLF_START_POP = 5;
+    const MACKEREL_START_POP = 300;
+    const SEAL_START_POP = 4;
+    const SEAGULL_START_POP = 40;
+
+    // --- VIEW & STATE VARIABLES ---
+    let view = { zoom: 4, offsetX: 0, offsetY: 0, isPanning: false, panStart: { x: 0, y: 0 } };
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = MAP_WIDTH;
+    offscreenCanvas.height = MAP_HEIGHT;
+    const offscreenCtx = offscreenCanvas.getContext('2d');
+    let staticMapDirty = true;
+    let day = 1;
+    let simulationInterval;
+    let terrainNoise = new SimplexNoise();
+    let weatherNoise = new SimplexNoise(Math.random());
+    let currentNoise = new SimplexNoise(Math.random());
+    let cloudOffsetX = Math.random() * 1000;
+    let lastSeason = '';
+    let activeChunks = new Set();
+    
+    // --- DATA MAPS ---
+    let elevationMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let temperatureMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let cloudMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let snowMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let waterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0)); 
+    let groundwaterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let iceMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let forestMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let seaweedMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let oceanCurrentMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill({ x: 0, y: 0, temp: 0 }));
+    let currentParticles = [];
+    let vegetationHealthMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(1.0));
+    let annualPrecipitationMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let islandTiles = [];
+    let deer = [];
+    let wolves = [];
+    let mackerel = [];
+    let seals = [];
+    let seagulls = [];
+    
+    // --- BIOME DEFINITIONS ---
+    const BIOMES = {
+        DEEP_OCEAN: { name: 'Deep Ocean', threshold: 0.3, color: [0, 51, 102], resistance: 1000 },
+        OCEAN: { name: 'Ocean', threshold: 0.45, color: [0, 102, 153], resistance: 1000 },
+        BEACH: { name: 'Beach', threshold: 0.5, color: [224, 213, 163], resistance: 10 },
+        LOWLANDS: { name: 'Lowlands', threshold: 0.7, color: { summer: [85, 166, 48], spring: [128, 185, 24], winter: [176, 160, 134] }, resistance: 5 },
+        HILLS: { name: 'Hills', threshold: 0.85, color: { summer: [43, 147, 72], spring: [85, 166, 50], winter: [138, 122, 97] }, resistance: 20 },
+        MOUNTAIN: { name: 'Mountain', threshold: 0.95, color: [128, 128, 128], resistance: 100 },
+        PEAK: { name: 'Peak', threshold: 1.0, color: [176, 176, 176], resistance: 200 },
+    };
+
+    const AUTUMN_FOREST_COLORS = [[217, 95, 2], [253, 141, 60], [230, 85, 13], [166, 54, 3]];
+    const AUTUMN_GRASS_COLORS = [[255, 224, 130], [255, 214, 100], [240, 200, 90], [220, 180, 80]];
+    const DROUGHT_COLOR = [189, 178, 133];
+
+    // --- UTILITY FUNCTIONS ---
+    function lerpColor(color1, color2, factor) {
+        if (!color1 || !color2) return [0,0,0]; 
+        factor = Math.max(0, Math.min(1, factor));
+        const r = color1[0] + factor * (color2[0] - color1[0]);
+        const g = color1[1] + factor * (color2[1] - color1[1]);
+        const b = color1[2] + factor * (color2[2] - color1[2]);
+        return [r, g, b];
+    }
+    
+    function getSeasonalTerrainColor(biome, dayOfYear, x, y) {
+        const seasonLength = YEAR_LENGTH / 4;
+        
+        const summerColor = biome.color.summer || [85, 166, 48];
+        const springColor = biome.color.spring || summerColor;
+        const winterColor = biome.color.winter || [176, 160, 134];
+
+        let fromColor, toColor, progress;
+        
+        if (dayOfYear < seasonLength) { // Spring
+            progress = dayOfYear / seasonLength;
+            fromColor = winterColor;
+            toColor = springColor;
+        } else if (dayOfYear < seasonLength * 2) { // Summer
+            progress = (dayOfYear - seasonLength) / seasonLength;
+            fromColor = springColor;
+            toColor = summerColor;
+        } else if (dayOfYear < seasonLength * 3) { // Autumn
+            progress = (dayOfYear - seasonLength * 2) / seasonLength;
+            const isForested = forestMap[y][x] > 0.1;
+            const autumnTargetPalette = isForested ? AUTUMN_FOREST_COLORS : AUTUMN_GRASS_COLORS;
+            const noise = (weatherNoise.noise2D(x / 5, y / 5) + 1) / 2;
+            const autumnColor = autumnTargetPalette[Math.floor(noise * autumnTargetPalette.length)];
+            fromColor = summerColor;
+            toColor = autumnColor;
+        } else { // Winter
+            progress = (dayOfYear - seasonLength * 3) / seasonLength;
+            const isForested = forestMap[y][x] > 0.1;
+            const autumnTargetPalette = isForested ? AUTUMN_FOREST_COLORS : AUTUMN_GRASS_COLORS;
+            const noise = (weatherNoise.noise2D(x / 5, y / 5) + 1) / 2;
+            const autumnColor = autumnTargetPalette[Math.floor(noise * autumnTargetPalette.length)];
+            fromColor = autumnColor;
+            toColor = winterColor;
+        }
+        
+        let seasonalColor = lerpColor(fromColor, toColor, progress);
+        
+        const health = vegetationHealthMap[y][x];
+        if (health < 1.0) {
+            seasonalColor = lerpColor(DROUGHT_COLOR, seasonalColor, health);
+        }
+
+        return `rgb(${Math.floor(seasonalColor[0])}, ${Math.floor(seasonalColor[1])}, ${Math.floor(seasonalColor[2])})`;
+    }
+
+    // --- INITIALIZATION & GENERATION ---
+    function initializeSalinity() {
+        salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold) salinityMap[y][x] = 1.0;
+                else if (riverMap[y][x] > 0) salinityMap[y][x] = 0.0;
+            }
+        }
+        for (let i = 0; i < 5; i++) {
+            let nextSalinityMap = salinityMap.map(arr => arr.slice());
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    if (riverMap[y][x] > 0) continue;
+                    let neighborSum = 0, neighborCount = 0;
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                neighborSum += salinityMap[ny][nx];
+                                neighborCount++;
+                            }
+                        }
+                    if(neighborCount > 0) nextSalinityMap[y][x] = neighborSum / neighborCount;
+                }
+            }
+            salinityMap = nextSalinityMap;
+        }
+    }
+
+    function initializeOceanCurrents() {
+        const currentType = oceanCurrentSelect.value;
+        if (currentType === 'none') {
+            oceanCurrentMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill({ x: 0, y: 0, temp: 0 }));
+            currentParticles = [];
+            return;
+        }
+
+        const tempModifier = currentType === 'warm' ? 5 : -5;
+        const gyreStrength = 0.2;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold) {
+                    const dy = -(y - MAP_HEIGHT / 2);
+                    const dx = x - MAP_WIDTH / 2;
+                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const noise = currentNoise.noise2D(x / 20, y / 20) * 0.3;
+                    const vecX = (-dy / len) * gyreStrength + noise;
+                    const vecY = (dx / len) * gyreStrength + noise;
+                    oceanCurrentMap[y][x] = { x: vecX, y: vecY, temp: tempModifier };
+                } else {
+                     oceanCurrentMap[y][x] = { x: 0, y: 0, temp: 0 };
+                }
+            }
+        }
+        
+        currentParticles = [];
+        for (let i = 0; i < 500; i++) {
+            const x = Math.random() * MAP_WIDTH;
+            const y = Math.random() * MAP_HEIGHT;
+            if (elevationMap[Math.floor(y)][Math.floor(x)] <= BIOMES.OCEAN.threshold) {
+                 currentParticles.push({ x, y, age: Math.random() * 100 });
+            }
+        }
+    }
+
+    function initializeFlora() {
+        seaweedMap.forEach(row => row.fill(0));
+         for(let y=0; y<MAP_HEIGHT; y++) {
+            for (let x=0; x<MAP_WIDTH; x++) {
+                if(elevationMap[y][x] > BIOMES.DEEP_OCEAN.threshold && elevationMap[y][x] <= BIOMES.OCEAN.threshold) {
+                   seaweedMap[y][x] = Math.random() * 0.6 + 0.2;
+                }
+            }
+        }
+    }
+
+    function initializeFauna() {
+        deer = []; wolves = []; mackerel = []; seals = []; seagulls = [];
+
+        const landSpawns = islandTiles.filter(t => getBiome(elevationMap[t.y][t.x]) === BIOMES.LOWLANDS && vegetationHealthMap[t.y][t.x] > 0.8);
+        for(let i = 0; i < DEER_START_POP && landSpawns.length > 0; i++) {
+            const spawn = landSpawns[Math.floor(Math.random() * landSpawns.length)];
+            const color = [160 + (Math.random() - 0.5) * 40, 82 + (Math.random() - 0.5) * 40, 45 + (Math.random() - 0.5) * 40];
+            deer.push({ id: crypto.randomUUID(), x: spawn.x, y: spawn.y, hunger: 50, thirst: 50, age: YEAR_LENGTH + 1, hasMatedThisYear: false, color });
+        }
+
+        const hillSpawns = islandTiles.filter(t => getBiome(elevationMap[t.y][t.x]) === BIOMES.HILLS);
+        for(let i = 0; i < WOLF_START_POP && hillSpawns.length > 0; i++) {
+            const spawn = hillSpawns[Math.floor(Math.random() * hillSpawns.length)];
+            const color = [108 + (Math.random() - 0.5) * 40, 117 + (Math.random() - 0.5) * 40, 125 + (Math.random() - 0.5) * 40];
+            wolves.push({ id: crypto.randomUUID(), x: spawn.x, y: spawn.y, hunger: 50, thirst: 50, age: YEAR_LENGTH * 2 + 1, satiated: 0, hasMatedThisYear: false, color });
+        }
+
+        const oceanSpawns = [];
+        for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) if(elevationMap[y][x] > BIOMES.DEEP_OCEAN.threshold && elevationMap[y][x] <= BIOMES.OCEAN.threshold) oceanSpawns.push({x,y});
+
+        for(let i = 0; i < MACKEREL_START_POP && oceanSpawns.length > 0; i++) {
+            const spawn = oceanSpawns[Math.floor(Math.random() * oceanSpawns.length)];
+            const color = [52 + (Math.random() - 0.5) * 40, 152 + (Math.random() - 0.5) * 40, 219 + (Math.random() - 0.5) * 40];
+            mackerel.push({ id: crypto.randomUUID(), x: spawn.x, y: spawn.y, hunger: 20, age: 1, hasMatedThisYear: false, color });
+        }
+
+        for(let i = 0; i < SEAL_START_POP && oceanSpawns.length > 0; i++) {
+            const spawn = oceanSpawns[Math.floor(Math.random() * oceanSpawns.length)];
+            const color = [189 + (Math.random() - 0.5) * 40, 195 + (Math.random() - 0.5) * 40, 199 + (Math.random() - 0.5) * 40];
+            seals.push({ id: crypto.randomUUID(), x: spawn.x, y: spawn.y, hunger: 50, age: YEAR_LENGTH + 1, onLand: false, satiated: 0, hasMatedThisYear: false, color });
+        }
+        
+        const coastalSpawns = islandTiles.filter(t => {
+            const biome = getBiome(elevationMap[t.y][t.x]);
+            if (biome !== BIOMES.HILLS && biome !== BIOMES.BEACH) return false;
+            for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++) {
+                const nx = t.x + dx, ny = t.y + dy;
+                if(nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) return true;
+            }
+            return false;
+        });
+
+        for(let i = 0; i < SEAGULL_START_POP && coastalSpawns.length > 0; i++) {
+            const spawn = coastalSpawns[Math.floor(Math.random() * coastalSpawns.length)];
+            const color = [224 + (Math.random() - 0.5) * 30, 224 + (Math.random() - 0.5) * 30, 224 + (Math.random() - 0.5) * 30];
+            seagulls.push({ id: crypto.randomUUID(), x: spawn.x, y: spawn.y, hunger: 40, age: YEAR_LENGTH + 1, nestX: spawn.x, nestY: spawn.y, satiated: 0, hasMatedThisYear: false, color });
+        }
+    }
+
+    function generateRiversAndLakes() {
+        riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        let lakeOutlets = [];
+        const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+        const basinThreshold = BIOMES.HILLS.threshold;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (!visited[y][x] && elevationMap[y][x] >= basinThreshold) {
+                    const basinCells = [];
+                    const boundaryCells = new Map();
+                    const queue = [{x, y}];
+                    visited[y][x] = true;
+                    let lowestOutlet = { x: -1, y: -1, elevation: Infinity };
+                    while(queue.length > 0) {
+                        const cell = queue.shift();
+                        basinCells.push(cell);
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = cell.x + dx, ny = cell.y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                if (!visited[ny][nx]) {
+                                    if (elevationMap[ny][nx] >= basinThreshold) {
+                                        visited[ny][nx] = true;
+                                        queue.push({x: nx, y: ny});
+                                    } else {
+                                        boundaryCells.set(`${nx},${ny}`, {x: nx, y: ny});
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (basinCells.length < 5) continue;
+                    for(const bCell of boundaryCells.values()) if(elevationMap[bCell.y][bCell.x] < lowestOutlet.elevation) lowestOutlet = { x: bCell.x, y: bCell.y, elevation: elevationMap[bCell.y][bCell.x] };
+                    if (lowestOutlet.x !== -1) {
+                         for(const basinCell of basinCells) if(elevationMap[basinCell.y][basinCell.x] < lowestOutlet.elevation) {
+                            riverMap[basinCell.y][basinCell.x] = 2;
+                            elevationMap[basinCell.y][basinCell.x] = lowestOutlet.elevation;
+                         }
+                         lakeOutlets.push({x: lowestOutlet.x, y: lowestOutlet.y});
+                    }
+                }
+            }
+        }
+        
+        for (const startPoint of lakeOutlets) {
+            let cx = startPoint.x, cy = startPoint.y;
+            for (let len = 0; len < 1000; len++) {
+                if (riverMap[cy][cx] === 0) riverMap[cy][cx] = 1;
+                if (elevationMap[cy][cx] <= BIOMES.OCEAN.threshold) break;
+                let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[cy][cx] };
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = cx + dx, ny = cy + dy;
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] < lowestNeighbor.elevation) {
+                        lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
+                    }
+                }
+                if (lowestNeighbor.x === -1) break; 
+                cx = lowestNeighbor.x; cy = lowestNeighbor.y;
+            }
+        }
+    }
+
+    function preGrowForests() {
+        forestMap.forEach(row => row.fill(0));
+        const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (elevationMap[y][x] > BIOMES.OCEAN.threshold && !visited[y][x]) {
+                    const currentIslandTiles = [];
+                    const queue = [{x, y}];
+                    visited[y][x] = true;
+                    while(queue.length > 0) {
+                        const cell = queue.shift();
+                        currentIslandTiles.push(cell);
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            const nx = cell.x + dx, ny = cell.y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && !visited[ny][nx] && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
+                                visited[ny][nx] = true;
+                                queue.push({x: nx, y: ny});
+                            }
+                        }
+                    }
+                    
+                    if (currentIslandTiles.length > 100) {
+                        let suitabilityMap = new Map();
+                        let potentialSpots = [];
+                        let maxSuitability = 0;
+                        for (const tile of currentIslandTiles) {
+                            const { x: tx, y: ty } = tile;
+                            const elevation = elevationMap[ty][tx];
+                            let suitability = 0;
+                            const isHabitable = elevation > BIOMES.LOWLANDS.threshold * 0.95 && elevation < BIOMES.MOUNTAIN.threshold;
+                            if (isHabitable) {
+                                suitability = 0.5;
+                                if (tx > 0) {
+                                    const slope = elevation - elevationMap[ty][tx - 1];
+                                    if (slope > 0.01) suitability += slope * 15;
+                                }
+                                if (tx < MAP_WIDTH - 1 && Math.abs(elevation - elevationMap[ty][tx + 1]) > 0.1) suitability = 0;
+                            }
+                            if(suitability > 0) {
+                                suitabilityMap.set(`${tx},${ty}`, suitability);
+                                potentialSpots.push({x: tx, y: ty, suitability});
+                                if (suitability > maxSuitability) maxSuitability = suitability;
+                            }
+                        }
+                        const seedSpots = potentialSpots.filter(s => s.suitability > maxSuitability * 0.3);
+                        for(const spot of seedSpots) {
+                            if(forestMap[spot.y][spot.x] > 0.5) continue;
+                            const forestQueue = [{ x: spot.x, y: spot.y, density: 1.0 }];
+                            const forestVisited = new Set([`${spot.x},${spot.y}`]);
+                            forestMap[spot.y][spot.x] = 1.0;
+                            while (forestQueue.length > 0) {
+                                forestQueue.sort((a, b) => b.density - a.density);
+                                const { x: fx, y: fy, density } = forestQueue.shift();
+                                if (density < 0.2) continue;
+                                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                                    if (dx === 0 && dy === 0) continue;
+                                    const nx = fx + dx, ny = fy + dy;
+                                    const key = `${nx},${ny}`;
+                                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && !forestVisited.has(key)) {
+                                        forestVisited.add(key);
+                                        const neighborSuitability = suitabilityMap.get(key) || 0;
+                                        if (neighborSuitability > 0.1) {
+                                            const newDensity = density * (neighborSuitability / maxSuitability) * 0.9;
+                                            if (newDensity > forestMap[ny][nx]) {
+                                                forestMap[ny][nx] = newDensity;
+                                                forestQueue.push({ x: nx, y: ny, density: newDensity });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    function preErode() {
+        const PRE_SIM_STEPS = 5000;
+        const PRE_SIM_EROSION_RATE = 0.0001;
+        const PRE_SIM_RAIN = 0.02;
+        let tempWaterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        let tempNextWaterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+
+        for (let i = 0; i < PRE_SIM_STEPS; i++) {
+            for (const tile of islandTiles) tempWaterMap[tile.y][tile.x] += PRE_SIM_RAIN;
+            for(let y=0; y < MAP_HEIGHT; y++) tempNextWaterMap[y].fill(0);
+            for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) {
+                if (tempWaterMap[y][x] <= 0.001) continue;
+                let currentWater = tempWaterMap[y][x];
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold) continue;
+                let lowestNeighbor = { x: -1, y: -1, totalHeight: elevationMap[y][x] + currentWater };
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                        const neighborTotalHeight = elevationMap[ny][nx] + tempWaterMap[ny][nx];
+                        if (neighborTotalHeight < lowestNeighbor.totalHeight) lowestNeighbor = { x: nx, y: ny, totalHeight: neighborTotalHeight };
+                    }
+                }
+                if (lowestNeighbor.x !== -1) {
+                    const heightDifference = (elevationMap[y][x] + currentWater) - lowestNeighbor.totalHeight;
+                    const waterToMove = Math.max(0, Math.min(currentWater, heightDifference / 2.0));
+                    tempNextWaterMap[lowestNeighbor.y][lowestNeighbor.x] += waterToMove;
+                    currentWater -= waterToMove;
+                }
+                tempNextWaterMap[y][x] += currentWater;
+            }
+            let swap = tempWaterMap; tempWaterMap = tempNextWaterMap; tempNextWaterMap = swap;
+            for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) if (riverMap[y][x] === 1 && tempWaterMap[y][x] > 0.1) {
+                let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[y][x] };
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] < lowestNeighbor.elevation) lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
+                }
+                if(lowestNeighbor.x !== -1) {
+                    const slope = elevationMap[y][x] - lowestNeighbor.elevation;
+                    const biome = getBiome(elevationMap[y][x]);
+                    const resistance = biome.resistance || 10;
+                    const erosionAmount = PRE_SIM_EROSION_RATE * tempWaterMap[y][x] * slope * (1 / resistance);
+                    if (elevationMap[y][x] > BIOMES.OCEAN.threshold + erosionAmount) elevationMap[y][x] -= erosionAmount;
+                }
+            }
+        }
+    }
+
+    function generateMap() {
+        regenButton.classList.add('loading');
+        setTimeout(() => {
+            terrainNoise = new SimplexNoise();
+            const frequency = 5.0 / MAP_WIDTH;
+            const octaves = 5;
+            const persistence = 0.55; 
+            islandTiles = [];
+
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    let noiseValue = 0; let amp = 1; let freq = frequency;
+                    for (let i = 0; i < octaves; i++) {
+                        noiseValue += terrainNoise.noise2D(x * freq, y * freq) * amp;
+                        amp *= persistence; freq *= 2;
+                    }
+                    noiseValue = (noiseValue + 1) / 2;
+                    
+                    const dx = x - MAP_WIDTH / 2; const dy = y - MAP_HEIGHT / 2;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const maxDist = Math.sqrt(Math.pow(MAP_WIDTH / 2, 2) + Math.pow(MAP_HEIGHT / 2, 2));
+                    const falloff = (1 - dist / maxDist);
+                    const islandMask = Math.pow(falloff, 0.7);
+
+                    elevationMap[y][x] = noiseValue * islandMask;
+                    
+                    if (elevationMap[y][x] > BIOMES.OCEAN.threshold) { islandTiles.push({x, y}); }
+                }
+            }
+            
+            generateRiversAndLakes();
+            preErode();
+            generateRiversAndLakes();
+            initializeSalinity();
+            initializeOceanCurrents();
+            preGrowForests();
+            initializeFlora();
+            
+            [snowMap, waterMap, iceMap, annualPrecipitationMap, cloudMap, temperatureMap, groundwaterMap].forEach(m => m.forEach(r => r.fill(0)));
+            vegetationHealthMap.forEach(r => r.fill(1.0));
+            initializeFauna();
+            activeChunks.clear();
+            for(let y = 0; y < MAP_HEIGHT; y++) for(let x = 0; x < MAP_WIDTH; x++) {
+                if(riverMap[y][x] > 0) {
+                    const chunkX = Math.floor(x / CHUNK_SIZE);
+                    const chunkY = Math.floor(y / CHUNK_SIZE);
+                    activeChunks.add(`${chunkX},${chunkY}`);
+                }
+            }
+            
+            staticMapDirty = true;
+            regenButton.classList.remove('loading');
+        }, 10);
+    }
+
+    function getBiome(elevation) {
+        for (const biomeKey in BIOMES) {
+            if (elevation <= BIOMES[biomeKey].threshold) return BIOMES[biomeKey];
+        }
+        return BIOMES.PEAK;
+    }
+    
+    // --- RENDERING ---
+    function drawStaticMapToOffscreenBuffer() {
+        const dayOfYear = (day - 1) % YEAR_LENGTH;
+        const hillShadeStrength = 15;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const biome = getBiome(elevationMap[y][x]);
+                let color;
+                if (typeof biome.color === 'object' && !Array.isArray(biome.color)) {
+                    color = getSeasonalTerrainColor(biome, dayOfYear, x, y);
+                } else {
+                    color = `rgb(${biome.color.join(',')})`;
+                }
+                
+                offscreenCtx.fillStyle = color;
+                offscreenCtx.fillRect(x, y, 1, 1);
+                
+                if (forestMap[y][x] > 0.1) {
+                    offscreenCtx.fillStyle = `rgba(13, 55, 13, ${Math.min(forestMap[y][x] * 0.9, 0.85)})`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
+
+                if (seaweedMap[y][x] > 0.1) {
+                     offscreenCtx.fillStyle = `rgba(22, 160, 133, ${Math.min(seaweedMap[y][x] * 0.5, 0.5)})`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
+
+                 if (elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    const westElevation = x > 0 ? elevationMap[y][x - 1] : elevationMap[y][x];
+                    const northElevation = y > 0 ? elevationMap[y - 1][x] : elevationMap[y][x];
+                    const shade = (westElevation - elevationMap[y][x]) * hillShadeStrength - (northElevation - elevationMap[y][x]) * hillShadeStrength;
+                    offscreenCtx.fillStyle = `rgba(0, 0, 0, ${Math.max(0, -shade * 0.2)})`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                    offscreenCtx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, shade * 0.1)})`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
+                 
+                if (riverMap[y][x] === 2) {
+                    offscreenCtx.fillStyle = '#3498db';
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                } else if (riverMap[y][x] === 1) {
+                    offscreenCtx.fillStyle = `rgba(41, 128, 185, 0.7)`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
+            }
+        }
+    }
+
+    function drawMap() {
+        if(staticMapDirty) {
+            drawStaticMapToOffscreenBuffer();
+            staticMapDirty = false;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(offscreenCanvas, view.offsetX, view.offsetY, MAP_WIDTH * view.zoom, MAP_HEIGHT * view.zoom);
+        
+        const viewMode = viewModeSelect.value;
+        const startX = Math.max(0, Math.floor(-view.offsetX / view.zoom));
+        const startY = Math.max(0, Math.floor(-view.offsetY / view.zoom));
+        const endX = Math.min(MAP_WIDTH, Math.ceil((-view.offsetX + canvas.width) / view.zoom));
+        const endY = Math.min(MAP_HEIGHT, Math.ceil((-view.offsetY + canvas.height) / view.zoom));
+
+        for (let y = startY; y < endY; y++) {
+            for (let x = startX; x < endX; x++) {
+                const screenX = Math.round(x * view.zoom + view.offsetX);
+                const screenY = Math.round(y * view.zoom + view.offsetY);
+                const nextScreenX = Math.round((x + 1) * view.zoom + view.offsetX);
+                const nextScreenY = Math.round((y + 1) * view.zoom + view.offsetY);
+                const renderWidth = nextScreenX - screenX;
+                const renderHeight = nextScreenY - screenY;
+                if (renderWidth <= 0 || renderHeight <= 0) continue;
+
+                if (viewMode === 'temp') {
+                    const temp = temperatureMap[y][x];
+                    const clampedTemp = Math.max(-10, Math.min(40, temp));
+                    const percent = (clampedTemp + 10) / 50; 
+                    let r, g, b;
+                    if (percent < 0.33) { const p = percent / 0.33; r = 0; g = 255 * p; b = 255 * (1 - p); } 
+                    else if (percent < 0.66) { const p = (percent - 0.33) / 0.33; r = 255 * p; g = 255; b = 0; } 
+                    else { const p = (percent - 0.66) / 0.34; r = 255; g = 255 * (1 - p); b = 0;}
+                    ctx.fillStyle = `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                } else if (viewMode === 'flow') {
+                    const waterAmount = waterMap[y][x] + (riverMap[y][x] > 0 ? 0.1 : 0);
+                    const saturation = Math.min(waterAmount * 2, 1);
+                    const r = 51, g = 51, b = 51;
+                    ctx.fillStyle = `rgba(${Math.floor(r+(52 - r) * saturation)}, ${Math.floor(g+(152-g)*saturation)}, ${Math.floor(b+(219-b)*saturation)}, 0.8)`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                } else if (viewMode === 'weather') {
+                    const grey = Math.floor(cloudMap[y][x] * 255);
+                    ctx.fillStyle = `rgba(${grey},${grey},${grey}, 0.8)`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                } else if (viewMode === 'groundwater') {
+                    const waterLevel = groundwaterMap[y][x];
+                    const saturation = Math.min(waterLevel / 2.0, 1.0);
+                    const r = 161, g = 106, b = 45;
+                    const r_sat = 52, g_sat = 152, b_sat = 219;
+                    ctx.fillStyle = `rgba(${Math.floor(r + (r_sat-r)*saturation)}, ${Math.floor(g + (g_sat-g)*saturation)}, ${Math.floor(b + (b_sat-b)*saturation)}, 0.7)`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                } else if (viewMode === 'fauna') {
+                    const isHabitat = islandTiles.some(t => t.x === x && t.y === y) && (getBiome(elevationMap[y][x]) === BIOMES.LOWLANDS || getBiome(elevationMap[y][x]) === BIOMES.HILLS);
+                    if (isHabitat) {
+                        ctx.fillStyle = `rgba(0, 255, 0, 0.2)`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                    }
+                }
+                
+                if (viewMode === 'terrain' || viewMode === 'weather' || viewMode === 'fauna') {
+                     if (riverMap[y][x] === 1) {
+                        const riverAlpha = Math.min(0.3 + waterMap[y][x] * 3.0, 1.0);
+                        if(riverAlpha > 0.31){
+                            const ceilZoom = Math.ceil(view.zoom);
+                            const riverWidthBonus = Math.min(waterMap[y][x] * 20, ceilZoom * 0.8);
+                            ctx.fillStyle = `rgba(82, 172, 229, ${riverAlpha})`;
+                            ctx.fillRect(screenX - riverWidthBonus / 2, screenY - riverWidthBonus/2, renderWidth + riverWidthBonus, renderHeight + riverWidthBonus);
+                        }
+                    }
+
+                    if (waterMap[y][x] > 0.1 && riverMap[y][x] === 0) {
+                        ctx.fillStyle = `rgba(82, 172, 229, ${Math.min(waterMap[y][x] / 2.0, 0.7)})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                    }
+                    if (snowMap[y][x] > 0.005) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.4 + snowMap[y][x] * 2.0, 1.0)})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                    }
+                }
+
+                if (iceMap[y][x] > 0.1) {
+                    ctx.fillStyle = `rgba(174, 214, 241, ${Math.min(iceMap[y][x] / 2.0, 0.8)})`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                }
+
+                if ((viewMode === 'terrain' || viewMode === 'weather' || viewMode === 'groundwater' || viewMode === 'fauna') && iceMap[y][x] < 0.1) {
+                    const cloudDensity = cloudMap[y][x];
+                    if (cloudDensity > 0.5) {
+                        const opacity = Math.pow((cloudDensity - 0.5) / 0.5, 2) * 0.7;
+                        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                        if (cloudDensity > 0.85) {
+                            ctx.fillStyle = temperatureMap[y][x] <= 0 ? 'rgba(220, 220, 255, 0.7)' : 'rgba(100, 150, 255, 0.6)';
+                            ctx.globalAlpha = 0.8;
+                            ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                            ctx.globalAlpha = 1.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (viewMode === 'currents') {
+            const currentType = oceanCurrentSelect.value;
+            ctx.fillStyle = currentType === 'warm' ? '#ff6b6b' : '#4db8ff';
+            for (const p of currentParticles) {
+                const screenX = p.x * view.zoom + view.offsetX;
+                const screenY = p.y * view.zoom + view.offsetY;
+                if (screenX > 0 && screenX < canvas.width && screenY > 0 && screenY < canvas.height) {
+                    ctx.globalAlpha = Math.sin(p.age / 20) * 0.5 + 0.2;
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, view.zoom * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        if (viewMode === 'terrain' || viewMode === 'fauna') {
+            const animalSize = Math.max(1.5, view.zoom * 0.4);
+            ctx.globalAlpha = 0.8;
+            
+            for(const m of mackerel) {
+                ctx.fillStyle = `rgb(${m.color[0]}, ${m.color[1]}, ${m.color[2]})`;
+                const screenX = m.x * view.zoom + view.offsetX;
+                const screenY = m.y * view.zoom + view.offsetY;
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize * 0.8, 0, Math.PI * 2); ctx.fill();
+            }
+            for(const s of seals) {
+                ctx.fillStyle = `rgb(${s.color[0]}, ${s.color[1]}, ${s.color[2]})`;
+                const screenX = s.x * view.zoom + view.offsetX;
+                const screenY = s.y * view.zoom + view.offsetY;
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize * 1.2, 0, Math.PI * 2); ctx.fill();
+            }
+            for(const p of seagulls) {
+                ctx.fillStyle = `rgb(${p.color[0]}, ${p.color[1]}, ${p.color[2]})`;
+                const screenX = p.x * view.zoom + view.offsetX;
+                const screenY = p.y * view.zoom + view.offsetY;
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize * 0.7, 0, Math.PI * 2); ctx.fill();
+            }
+            for(const d of deer) {
+                ctx.fillStyle = `rgb(${d.color[0]}, ${d.color[1]}, ${d.color[2]})`;
+                const screenX = d.x * view.zoom + view.offsetX;
+                const screenY = d.y * view.zoom + view.offsetY;
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize, 0, Math.PI * 2); ctx.fill();
+            }
+            for(const w of wolves) {
+                ctx.fillStyle = `rgb(${w.color[0]}, ${w.color[1]}, ${w.color[2]})`;
+                const screenX = w.x * view.zoom + view.offsetX;
+                const screenY = w.y * view.zoom + view.offsetY;
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    // --- SIMULATION LOGIC ---
+    function updateWeather() {
+        const dayOfYear = (day - 1) % YEAR_LENGTH;
+        const yearlyBaseTemp = TEMP_AVG - Math.cos((dayOfYear / YEAR_LENGTH) * 2 * Math.PI) * TEMP_AMPLITUDE;
+        
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const elevation = elevationMap[y][x];
+                let temp = yearlyBaseTemp;
+
+                if (elevation <= BIOMES.OCEAN.threshold) {
+                    temp += oceanCurrentMap[y][x].temp;
+                } else { 
+                    const landElevation = (elevation - BIOMES.OCEAN.threshold) / (1 - BIOMES.OCEAN.threshold);
+                    temp -= landElevation * 25;
+                    let oceanInfluence = 0;
+                    let neighborCount = 0;
+                    for (let dy = -2; dy <= 2; dy++) {
+                        for (let dx = -2; dx <= 2; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) {
+                                const dist = Math.sqrt(dx*dx + dy*dy);
+                                oceanInfluence += temperatureMap[ny][nx] / dist;
+                                neighborCount += 1 / dist;
+                            }
+                        }
+                    }
+                    if (neighborCount > 0) {
+                        const avgOceanTemp = oceanInfluence / neighborCount;
+                        temp = (temp + avgOceanTemp) / 2;
+                    }
+                }
+
+                const weatherFluctuation = weatherNoise.noise3D(x / 20, y / 20, day / 10) * 4;
+                temp += weatherFluctuation;
+                temperatureMap[y][x] = temp;
+            }
+        }
+        if (islandTiles.length > 0) {
+            const totalIslandTemp = islandTiles.reduce((sum, tile) => sum + temperatureMap[tile.y][tile.x], 0);
+            avgTempEl.textContent = `${(totalIslandTemp / islandTiles.length).toFixed(1)}°C`;
+        } else {
+            avgTempEl.textContent = `N/A`;
+        }
+    }
+
+    function updateCloudsAndWeather() {
+        cloudOffsetX += 0.015;
+
+        const cloudFreq = 5.0 / MAP_WIDTH;
+        const windEffectFactor = 8.0, rainShadowFactor = 12.0, peakClearFactor = 1.5;
+        let moistureMap = Array(MAP_HEIGHT).fill(1.0);
+        let avgIslandTemp = 0;
+        if (islandTiles.length > 0) {
+            avgIslandTemp = islandTiles.reduce((sum, tile) => sum + temperatureMap[tile.y][tile.x], 0) / islandTiles.length;
+        }
+        let tempCloudReduction = avgIslandTemp > 18 ? Math.min((avgIslandTemp - 18) / 15, 1) * 0.8 : 0;
+        for (let x = 0; x < MAP_WIDTH; x++) {
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                const currentElevation = elevationMap[y][x];
+                let topoEffect = 0;
+                let moistureBonus = 0;
+
+                const upwindX = x - 1;
+                if (upwindX >= 0 && elevationMap[y][upwindX] <= BIOMES.OCEAN.threshold) {
+                    const oceanTemp = temperatureMap[y][upwindX];
+                    const baseOceanTemp = TEMP_AVG - Math.cos(((day - 1) % YEAR_LENGTH / YEAR_LENGTH) * 2 * Math.PI) * TEMP_AMPLITUDE;
+                    if (oceanTemp > baseOceanTemp) {
+                         moistureBonus = (oceanTemp - baseOceanTemp) * 0.05;
+                    }
+                }
+
+
+                 if (currentElevation > BIOMES.OCEAN.threshold) {
+                    const upwindElevation = (x > 0) ? elevationMap[y][x - 1] : currentElevation;
+                    const slope = (currentElevation - upwindElevation) * 15;
+                    if (slope > 0) topoEffect = slope * windEffectFactor;
+                    else topoEffect = slope * rainShadowFactor;
+                    if (currentElevation > BIOMES.MOUNTAIN.threshold) {
+                        const peakEffect = (currentElevation - BIOMES.MOUNTAIN.threshold) / (1.0 - BIOMES.MOUNTAIN.threshold);
+                        topoEffect -= peakEffect * peakClearFactor;
+                    }
+                }
+                let baseDensity = ((weatherNoise.noise2D((x * cloudFreq) + cloudOffsetX, y * cloudFreq) + 1) / 2) * (moistureMap[y] + moistureBonus) * (1 - tempCloudReduction);
+                cloudMap[y][x] = Math.max(0, Math.min(1, baseDensity + (topoEffect / 100)));
+                
+                if (cloudMap[y][x] > 0.85) moistureMap[y] *= 0.4;
+                else moistureMap[y] = Math.min(1.0, moistureMap[y] + 0.02);
+            }
+        }
+        const avgCloudiness = islandTiles.length > 0 ? islandTiles.reduce((sum, t) => sum + cloudMap[t.y][t.x], 0) / islandTiles.length : 0;
+        if(avgCloudiness > 0.65) weatherEl.textContent = 'Stormy';
+        else if (avgCloudiness > 0.45) weatherEl.textContent = 'Cloudy';
+        else if (avgCloudiness > 0.30) weatherEl.textContent = 'Partly Cloudy';
+        else weatherEl.textContent = 'Clear';
+    }
+    
+    function updateSurfaceWater() {
+        const meltRate = 0.2, accumulationRate = 0.1, rainAmount = 0.05, maxSnowDepth = 5.0;
+        const seepageRate = 0.2;
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const temp = temperatureMap[y][x];
+                if (temp > 0 && snowMap[y][x] > 0) {
+                    const meltAmount = temp * meltRate * 0.1;
+                    const actualMelt = Math.min(snowMap[y][x], meltAmount);
+                    snowMap[y][x] -= actualMelt;
+                    if(elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                        waterMap[y][x] += actualMelt;
+                        annualPrecipitationMap[y][x] += actualMelt;
+                        activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                    }
+                }
+                if (cloudMap[y][x] > 0.85 && elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    if (temp <= 0) {
+                        snowMap[y][x] = Math.min(maxSnowDepth, snowMap[y][x] + accumulationRate);
+                        annualPrecipitationMap[y][x] += accumulationRate;
+                    } else {
+                        waterMap[y][x] += rainAmount;
+                        annualPrecipitationMap[y][x] += rainAmount;
+                        activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                    }
+                }
+
+                if (waterMap[y][x] > 0.01 && riverMap[y][x] === 0) {
+                    const toSeep = waterMap[y][x] * seepageRate;
+                    waterMap[y][x] -= toSeep;
+                    groundwaterMap[y][x] += toSeep;
+                }
+            }
+        }
+    }
+
+    function updateFlora() {
+        let dirty = false;
+        // Seaweed growth
+        for(let y=0; y<MAP_HEIGHT; y++) {
+            for (let x=0; x<MAP_WIDTH; x++) {
+                if(elevationMap[y][x] > BIOMES.DEEP_OCEAN.threshold && elevationMap[y][x] <= BIOMES.OCEAN.threshold) {
+                    const temp = temperatureMap[y][x];
+                    const light = 1 - cloudMap[y][x];
+                    if (temp > 5 && temp < 25) {
+                        seaweedMap[y][x] = Math.min(1.0, seaweedMap[y][x] + 0.01 * light);
+                        dirty = true;
+                    }
+                }
+            }
+        }
+        if(dirty) staticMapDirty = true;
+    }
+
+    function updateEcology() {
+        const growthRate = 0.05, spreadChance = 0.1, declineRate = 0.02;
+        let forestDirty = false;
+        for (const tile of islandTiles) {
+            const { x, y } = tile;
+            const elevation = elevationMap[y][x], precipitation = annualPrecipitationMap[y][x];
+            const landElevation = (elevation - BIOMES.OCEAN.threshold) / (1 - BIOMES.OCEAN.threshold);
+            const avgAnnualTemp = TEMP_AVG - landElevation * 25;
+            const isHabitable = elevation > BIOMES.BEACH.threshold && elevation < BIOMES.PEAK.threshold && avgAnnualTemp > 1 && precipitation > 5;
+
+            if (isHabitable) {
+                if(forestMap[y][x] < 1.0) { forestMap[y][x] = Math.min(1.0, forestMap[y][x] + growthRate * (precipitation / 20)); forestDirty = true; }
+                if (forestMap[y][x] > 0.5) {
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if ((dx !== 0 || dy !== 0) && Math.random() < spreadChance) {
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                if(elevationMap[ny][nx] > BIOMES.BEACH.threshold && elevationMap[ny][nx] < BIOMES.PEAK.threshold) {
+                                    if(forestMap[ny][nx] < 1.0) { forestMap[ny][nx] = Math.min(1.0, forestMap[ny][nx] + growthRate * 0.1); forestDirty = true; }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (forestMap[y][x] > 0) { forestMap[y][x] = Math.max(0.0, forestMap[y][x] - declineRate); forestDirty = true; }
+        }
+        
+        annualPrecipitationMap.forEach(r => r.fill(0));
+        if(forestDirty) staticMapDirty = true;
+    }
+
+    function updateIce() {
+        const freezeRate = 0.02, meltRate = 0.04, maxIce = 4.0;
+        let totalTemp = 0;
+        for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) totalTemp += temperatureMap[y][x];
+        const averageWorldTemp = totalTemp / (MAP_WIDTH * MAP_HEIGHT);
+
+        for(let y=0; y<MAP_HEIGHT; y++) {
+            for(let x=0; x<MAP_WIDTH; x++) {
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] > 0) {
+                    const temp = temperatureMap[y][x], salinity = salinityMap[y][x];
+                    const freezePoint = 0.0 - (salinity * 2.0);
+                    const canOceanFreeze = salinity > 0.8 && averageWorldTemp <= -10;
+                    if(temp < freezePoint && (salinity <= 0.8 || canOceanFreeze)) {
+                        iceMap[y][x] = Math.min(maxIce, iceMap[y][x] + (freezePoint - temp) * freezeRate);
+                    } else if (temp > freezePoint && iceMap[y][x] > 0) {
+                        iceMap[y][x] = Math.max(0, iceMap[y][x] - (temp - freezePoint) * meltRate);
+                    }
+                }
+            }
+        }
+    }
+
+    function updateErosion() {
+        const erosionRate = 0.000005; 
+        let mapDirty = false;
+        for (const chunkKey of activeChunks) {
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            const startX = chunkX * CHUNK_SIZE, startY = chunkY * CHUNK_SIZE;
+            const endX = Math.min(startX + CHUNK_SIZE, MAP_WIDTH);
+            const endY = Math.min(startY + CHUNK_SIZE, MAP_HEIGHT);
+
+            for(let y = startY; y < endY; y++) {
+                for(let x = startX; x < endX; x++) {
+                     if (riverMap[y][x] === 1 && waterMap[y][x] > 0.1) {
+                        let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[y][x] };
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            if(dx === 0 && dy === 0) continue;
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                if (elevationMap[ny][nx] < lowestNeighbor.elevation) {
+                                    lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
+                                }
+                            }
+                        }
+                        if(lowestNeighbor.x !== -1) {
+                            const slope = elevationMap[y][x] - lowestNeighbor.elevation;
+                            const biome = getBiome(elevationMap[y][x]);
+                            const resistance = biome.resistance || 10;
+                            const erosionAmount = erosionRate * waterMap[y][x] * slope * (1 / resistance);
+                            if (elevationMap[y][x] > BIOMES.OCEAN.threshold + erosionAmount) {
+                                elevationMap[y][x] -= erosionAmount;
+                                mapDirty = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if(mapDirty) staticMapDirty = true;
+    }
+    
+    function updateVegetationHealth() {
+        let dirty = false;
+        for(let y=0; y<MAP_HEIGHT; y++) {
+            for(let x=0; x<MAP_WIDTH; x++) {
+                const biome = getBiome(elevationMap[y][x]);
+                if(biome === BIOMES.LOWLANDS || biome === BIOMES.HILLS) {
+                    const temp = temperatureMap[y][x];
+                    const water = waterMap[y][x] + groundwaterMap[y][x];
+                    let health = vegetationHealthMap[y][x];
+                    
+                    if(water > 0.01) health = Math.min(1.0, health + 0.1);
+                    if(temp > 30) health = Math.max(0.0, health - 0.05);
+                    else if(health < 1.0 && temp < 25) health = Math.min(1.0, health + 0.01);
+                    
+                    if(vegetationHealthMap[y][x] !== health) {
+                        vegetationHealthMap[y][x] = health;
+                        dirty = true;
+                    }
+                }
+            }
+        }
+        if (dirty) staticMapDirty = true;
+    }
+
+    function updateWaterFlow() {
+        const flowSpeed = 0.5, riverSeepage = 0.005;
+        const groundwaterFeedRate = 0.01;
+        const groundwaterDiffusionRate = 0.1;
+
+        let nextGroundwaterMap = groundwaterMap.map(arr => arr.slice());
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                 if (elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    let neighborSum = 0, neighborCount = 0;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
+                            neighborSum += groundwaterMap[ny][nx];
+                            neighborCount++;
+                        }
+                    }
+                    if (neighborCount > 0) {
+                        const avgNeighbor = neighborSum / neighborCount;
+                        nextGroundwaterMap[y][x] += (avgNeighbor - groundwaterMap[y][x]) * groundwaterDiffusionRate;
+                    }
+                }
+            }
+        }
+        groundwaterMap = nextGroundwaterMap;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (riverMap[y][x] > 0 && groundwaterMap[y][x] > 0) {
+                    const feedAmount = Math.min(groundwaterMap[y][x], groundwaterFeedRate);
+                    groundwaterMap[y][x] -= feedAmount;
+                    waterMap[y][x] += feedAmount;
+                    activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                }
+            }
+        }
+
+        let waterFromNeighbors = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        let nextActiveChunks = new Set();
+        for (const chunkKey of activeChunks) {
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            const startX = chunkX * CHUNK_SIZE, startY = chunkY * CHUNK_SIZE;
+            const endX = Math.min(startX + CHUNK_SIZE, MAP_WIDTH);
+            const endY = Math.min(startY + CHUNK_SIZE, MAP_HEIGHT);
+            for(let y = startY; y < endY; y++) {
+                for(let x = startX; x < endX; x++) {
+                    let currentWater = waterMap[y][x];
+                    if (currentWater <= 0.001 && riverMap[y][x] === 0) continue;
+                    if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] === 2) {
+                        waterFromNeighbors[y][x] += currentWater; continue;
+                    };
+                    let lowestNeighbor = { x: -1, y: -1, totalHeight: elevationMap[y][x] + currentWater };
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                            const neighborTotalHeight = elevationMap[ny][nx] + waterMap[ny][nx];
+                            if (neighborTotalHeight < lowestNeighbor.totalHeight) {
+                                lowestNeighbor = { x: nx, y: ny, totalHeight: neighborTotalHeight };
+                            }
+                        }
+                    }
+                    if (lowestNeighbor.x !== -1) {
+                        const heightDifference = (elevationMap[y][x] + currentWater) - lowestNeighbor.totalHeight;
+                        const waterToMove = Math.max(0, Math.min(currentWater, heightDifference / 2.0) * flowSpeed);
+                        if (waterToMove > 0) {
+                            waterFromNeighbors[lowestNeighbor.y][lowestNeighbor.x] += waterToMove;
+                            currentWater -= waterToMove;
+                        }
+                    }
+                    waterFromNeighbors[y][x] += currentWater;
+                }
+            }
+        }
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                let currentWater = waterFromNeighbors[y][x];
+                if (currentWater <= 0.001) { waterMap[y][x] = 0; continue; }
+                const isRiver = riverMap[y][x] === 1;
+                if(isRiver) currentWater += riverSeepage;
+                
+                const temp = temperatureMap[y][x];
+                let baseEvaporation = 0.02;
+                if(temp > 25) baseEvaporation *= (1 + (temp-25) / 10);
+                
+                const evaporationRate = baseEvaporation;
+                currentWater *= (1 - evaporationRate);
+
+                if (riverMap[y][x] === 2 && iceMap[y][x] > 0.2) {
+                     currentWater *= (1 - (baseEvaporation * (iceMap[y][x] / 4.0)));
+                }
+                waterMap[y][x] = Math.max(0, currentWater);
+                if (waterMap[y][x] > 0.001) {
+                    nextActiveChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                }
+            }
+        }
+        activeChunks = nextActiveChunks;
+    }
+    
+    function updateCurrentParticles() {
+        if (viewModeSelect.value !== 'currents') return;
+        for (let p of currentParticles) {
+            const mapX = Math.floor(p.x);
+            const mapY = Math.floor(p.y);
+            if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT) {
+                const current = oceanCurrentMap[mapY][mapX];
+                p.x += current.x;
+                p.y += current.y;
+            }
+            p.age++;
+            if (p.age > 100 || p.x < 0 || p.x >= MAP_WIDTH || p.y < 0 || p.y >= MAP_HEIGHT) {
+                p.x = Math.random() * MAP_WIDTH;
+                p.y = Math.random() * MAP_HEIGHT;
+                p.age = 0;
+            }
+        }
+    }
+
+    function updateFauna() {
+        const currentSeason = getSeasonName();
+        const dayInYear = (day - 1) % YEAR_LENGTH;
+        const isMatingSeason = currentSeason === 'Spring';
+        const isWolfPairingSeason = currentSeason === 'Winter' && dayInYear > (YEAR_LENGTH - 45);
+        const newBirths = [];
+        const deadDeer = new Set();
+        const deadMackerel = new Set();
+        const deadSeagulls = new Set();
+        
+        if (dayInYear === 1) {
+            [...deer, ...wolves, ...mackerel, ...seals, ...seagulls].forEach(a => a.hasMatedThisYear = false);
+        }
+
+        // --- Terrestrial Fauna ---
+        for (let i = deer.length - 1; i >= 0; i--) {
+            const d = deer[i];
+            d.hunger += 0.1; d.thirst += 0.15; d.age++;
+ 
+            let bestTile = {x: d.x, y: d.y, score: -Infinity};
+            for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++) {
+                const nx = d.x + dx, ny = d.y + dy;
+                if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT || elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) continue;
+                
+                const isOccupied = deer.some(other => other.id !== d.id && Math.floor(other.x) === nx && Math.floor(other.y) === ny);
+                let score = isOccupied ? -1000 : 0;
+                wolves.forEach(w => { const dist = Math.hypot(nx - w.x, ny - w.y); if (dist < 8) score -= (8 - dist) * (150 - d.hunger); });
+                if ((riverMap[ny][nx] > 0 || waterMap[ny][nx] > 0.1) && salinityMap[ny][nx] < 0.1) score += d.thirst * 2;
+                score += Math.pow(d.hunger, 1.8) * vegetationHealthMap[ny][nx];
+                deer.forEach(other => { if (d.id !== other.id) { const dist = Math.hypot(nx - other.x, ny - other.y); if (dist < 10) score += (10-dist); }});
+                score -= (Math.abs(elevationMap[ny][nx] - elevationMap[d.y][d.x]) * 10 + snowMap[ny][nx] * 5);
+                if (score > bestTile.score) bestTile = {x: nx, y: ny, score};
+            }
+            d.x = bestTile.x; d.y = bestTile.y;
+ 
+            if (vegetationHealthMap[d.y][d.x] > 0.1 && d.hunger > 50) { d.hunger -= 20; vegetationHealthMap[d.y][d.x] -= 0.05; staticMapDirty = true; }
+            if ((riverMap[d.y][d.x] > 0 || waterMap[d.y][d.x] > 0.1) && salinityMap[d.y][d.x] < 0.1 && d.thirst > 60) { d.thirst -= 30; }
+ 
+            if (isMatingSeason && !d.hasMatedThisYear && d.age > YEAR_LENGTH && d.age < 8 * YEAR_LENGTH && d.hunger < 60 && d.thirst < 70 && Math.random() < 0.10) {
+                 d.hasMatedThisYear = true; newBirths.push({ type: 'deer', x: d.x, y: d.y, color: [160 + (Math.random() - 0.5) * 40, 82 + (Math.random() - 0.5) * 40, 45 + (Math.random() - 0.5) * 40] });
+            }
+ 
+            if(d.hunger > 100 || d.thirst > 100 || d.age > 10 * YEAR_LENGTH) deer.splice(i, 1);
+        }
+ 
+        for (let i = wolves.length - 1; i >= 0; i--) {
+            const w = wolves[i];
+            w.hunger += 0.2; w.thirst += 0.1; w.age++;
+            if (w.satiated > 0) w.satiated--;
+            
+            let closestPrey = null, minPreyDist = Infinity;
+            deer.forEach(d => { const dist = Math.hypot(w.x - d.x, w.y - d.y); if (dist < minPreyDist && !deadDeer.has(d.id)) { minPreyDist = dist; closestPrey = d; } });
+            if (w.hunger > 70) { // Opportunistic hunting
+                seagulls.forEach(p => { const dist = Math.hypot(w.x - p.x, w.y - p.y); if (dist < minPreyDist) { minPreyDist = dist; closestPrey = p; }});
+                seals.forEach(s => { if(s.onLand) { const dist = Math.hypot(w.x-s.x, w.y-s.y); if(dist < minPreyDist) { minPreyDist = dist; closestPrey = s; }}});
+            }
+ 
+            let bestTile = { x: w.x, y: w.y, score: -Infinity };
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                const nx = w.x + dx, ny = w.y + dy;
+                if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT || elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) continue;
+                const isOccupied = wolves.some(other => other.id !== w.id && Math.floor(other.x) === nx && Math.floor(other.y) === ny);
+                let score = isOccupied ? -1000 : 0;
+                
+                if (isWolfPairingSeason && w.age > 2 * YEAR_LENGTH && w.age < 12 * YEAR_LENGTH && w.hunger < 50) {
+                    wolves.forEach(other => { if(w.id !== other.id) { const dist = Math.hypot(nx - other.x, ny - other.y); score += (20 - dist) * 10; }});
+                } else if (closestPrey && w.hunger > 40 && w.satiated === 0) {
+                    const distToPrey = Math.hypot(nx - closestPrey.x, ny - closestPrey.y);
+                    score += (MAP_WIDTH - distToPrey) * (w.hunger / 50);
+                }
+                if ((riverMap[ny][nx] > 0 || waterMap[ny][nx] > 0.1) && salinityMap[ny][nx] < 0.1) score += w.thirst * 2;
+                score += Math.random();
+                score -= (Math.abs(elevationMap[ny][nx] - elevationMap[w.y][w.x]) * 10 + snowMap[ny][nx] * 5);
+                if (score > bestTile.score) bestTile = { x: nx, y: ny, score };
+            }
+            w.x = bestTile.x; w.y = bestTile.y;
+
+            if (closestPrey && Math.hypot(w.x - closestPrey.x, w.y - closestPrey.y) < 1.5) {
+                w.hunger = 0; w.satiated = 20; 
+                if (deer.includes(closestPrey)) deadDeer.add(closestPrey.id);
+                else if (seals.includes(closestPrey)) seals = seals.filter(s => s.id !== closestPrey.id);
+                else if (seagulls.includes(closestPrey)) seagulls = seagulls.filter(s => s.id !== closestPrey.id);
+            }
+            if ((riverMap[w.y][w.x] > 0 || waterMap[w.y][w.x] > 0.1) && salinityMap[w.y][w.x] < 0.1 && w.thirst > 60) { w.thirst -= 30; }
+ 
+            if (isMatingSeason && !w.hasMatedThisYear && w.age > 2 * YEAR_LENGTH && w.age < 12 * YEAR_LENGTH && w.hunger < 60 && wolves.length < deer.length / 4 && Math.random() < 0.08) {
+                w.hasMatedThisYear = true; newBirths.push({ type: 'wolf', x: w.x, y: w.y, color: [108 + (Math.random() - 0.5) * 40, 117 + (Math.random() - 0.5) * 40, 125 + (Math.random() - 0.5) * 40] });
+            }
+ 
+            if(w.hunger > 100 || w.thirst > 100 || w.age > 15 * YEAR_LENGTH) wolves.splice(i, 1);
+        }
+ 
+        if(deadDeer.size > 0) deer = deer.filter(d => !deadDeer.has(d.id));
+
+        // --- Marine & Avian Fauna ---
+        for (let i = mackerel.length - 1; i >= 0; i--) {
+            const m = mackerel[i];
+            let planktonSustenance = 0.1;
+            if (currentSeason === 'Winter') planktonSustenance = 0.02;
+            if (currentSeason === 'Spring' || currentSeason === 'Summer') planktonSustenance = 0.15;
+            m.hunger += 0.2;
+            m.hunger = Math.max(0, m.hunger - planktonSustenance);
+            m.age++;
+
+            const isThreatened = seals.some(p => Math.hypot(m.x - p.x, m.y - p.y) < 10) || seagulls.some(p => Math.hypot(m.x - p.x, m.y - p.y) < 10);
+            
+            let schoolmates = mackerel.filter(other => m.id !== other.id && Math.hypot(m.x - other.x, m.y - other.y) < 7);
+            let schoolCenterX = 0;
+            let schoolCenterY = 0;
+            if (schoolmates.length > 2) {
+                schoolmates.forEach(sm => { schoolCenterX += sm.x; schoolCenterY += sm.y; });
+                schoolCenterX /= schoolmates.length;
+                schoolCenterY /= schoolmates.length;
+            }
+            
+            let bestTile = {x: m.x, y: m.y, score: -Infinity};
+            for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++) {
+                const nx = m.x + dx, ny = m.y + dy;
+                if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT || elevationMap[ny][nx] > BIOMES.OCEAN.threshold) continue;
+
+                let score = 0;
+                [...seals, ...seagulls].forEach(p => { const dist = Math.hypot(nx - p.x, ny - p.y); if(dist < 8) score -= (8-dist) * 200; });
+                
+                if(elevationMap[ny][nx] > BIOMES.DEEP_OCEAN.threshold) {
+                    score += isThreatened ? 20 : 150;
+                }
+                
+                score += seaweedMap[ny][nx] * m.hunger;
+                
+                if (schoolmates.length > 2) {
+                    const toCenterX = schoolCenterX - nx;
+                    const toCenterY = schoolCenterY - ny;
+                    const distToCenter = Math.hypot(toCenterX, toCenterY);
+                    
+                    score += (7 - distToCenter) * 10; 
+
+                    const tangentX = -toCenterY;
+                    const tangentY = toCenterX;
+                    const moveX = nx - m.x;
+                    const moveY = ny - m.y;
+                    
+                    if (tangentX !== 0 || tangentY !== 0) {
+                        const dotProduct = (moveX * tangentX + moveY * tangentY) / Math.sqrt(tangentX*tangentX + tangentY*tangentY);
+                        score += dotProduct * 30;
+                    }
+                }
+                mackerel.forEach(other => { if (m.id !== other.id) { const dist = Math.hypot(nx - other.x, ny - other.y); if(dist < 1.5) score -= 1000; }});
+                
+                const current = oceanCurrentMap[ny][nx];
+                score += (dx * current.x + dy * current.y) * 10;
+                if (score > bestTile.score) bestTile = {x: nx, y: ny, score};
+            }
+            m.x = bestTile.x; m.y = bestTile.y;
+
+            const ix = Math.floor(m.x), iy = Math.floor(m.y);
+            if(ix >= 0 && ix < MAP_WIDTH && iy >= 0 && iy < MAP_HEIGHT && seaweedMap[iy][ix] > 0.1 && m.hunger > 30) { m.hunger -= 20; seaweedMap[iy][ix] = Math.max(0.1, seaweedMap[iy][ix] - 0.05); staticMapDirty = true; }
+            if(isMatingSeason && !m.hasMatedThisYear && m.age > 100 && m.age < 2 * YEAR_LENGTH && m.hunger < 50 && Math.random() < 0.05) { m.hasMatedThisYear = true; newBirths.push({type: 'mackerel', x: m.x, y: m.y, color: [52 + (Math.random() - 0.5) * 40, 152 + (Math.random() - 0.5) * 40, 219 + (Math.random() - 0.5) * 40]});}
+            if(m.hunger > 100 || m.age > 3 * YEAR_LENGTH) mackerel.splice(i, 1);
+        }
+
+        for (let i = seals.length - 1; i >= 0; i--) {
+            const s = seals[i];
+            s.hunger += 0.15; s.age++;
+            if (s.satiated > 0) s.satiated--;
+            
+            let bestTile = {x: s.x, y: s.y, score: -Infinity};
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                const nx = s.x + dx, ny = s.y + dy;
+                if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT) continue;
+                
+                let score = 0;
+                const onLandNext = elevationMap[ny][nx] > BIOMES.OCEAN.threshold;
+                if(s.hunger > 60 && onLandNext) score = -Infinity;
+                else if (s.hunger < 30 && getBiome(elevationMap[ny][nx]) === BIOMES.BEACH) score += 1000;
+                else if (!onLandNext && s.satiated === 0) {
+                    let closestMackerelDist = Infinity;
+                    mackerel.forEach(m => { if(!deadMackerel.has(m.id)) {const dist = Math.hypot(nx - m.x, ny-m.y); if(dist < closestMackerelDist) closestMackerelDist = dist;}});
+                    if(closestMackerelDist !== Infinity) score += (MAP_WIDTH - closestMackerelDist) * (s.hunger / 50);
+                    if(elevationMap[ny][nx] > BIOMES.DEEP_OCEAN.threshold) score += 20;
+                }
+                if (score > bestTile.score) bestTile = {x: nx, y: ny, score};
+            }
+            s.x = bestTile.x; s.y = bestTile.y;
+            s.onLand = elevationMap[s.y][s.x] > BIOMES.OCEAN.threshold;
+
+            const eaten = mackerel.findIndex(m => !deadMackerel.has(m.id) && Math.hypot(s.x-m.x, s.y-m.y) < 1.5);
+            if(eaten !== -1) { s.hunger = 0; s.satiated = 15; deadMackerel.add(mackerel[eaten].id); }
+
+            if(isMatingSeason && !s.hasMatedThisYear && s.onLand && s.age > 2 * YEAR_LENGTH && s.age < 15 * YEAR_LENGTH && s.hunger < 50 && Math.random() < 0.03) { s.hasMatedThisYear = true; newBirths.push({ type: 'seal', x: s.x, y: s.y, color: [189 + (Math.random() - 0.5) * 40, 195 + (Math.random() - 0.5) * 40, 199 + (Math.random() - 0.5) * 40] }); }
+            if(s.hunger > 100 || s.age > 20 * YEAR_LENGTH) seals.splice(i, 1);
+        }
+
+        for(let i = seagulls.length - 1; i >= 0; i--) {
+            const p = seagulls[i];
+            p.hunger += 0.3; p.age++;
+            if(p.satiated > 0) p.satiated--;
+
+            let bestTile = {x: p.x, y: p.y, score: -Infinity};
+            if(p.hunger > 50 && p.satiated === 0) { // Hunt
+                let closestMackerel = null, minMackerelDist = Infinity;
+                mackerel.forEach(m => { if(!deadMackerel.has(m.id)) {const dist = Math.hypot(p.x - m.x, p.y - m.y); if(dist < minMackerelDist) { minMackerelDist = dist; closestMackerel = m; }}});
+                if(closestMackerel) { bestTile = {x: p.x + Math.sign(closestMackerel.x-p.x), y: p.y + Math.sign(closestMackerel.y-p.y), score: 1}; }
+            } else { // Return to nest or scavenge
+                const distToNest = Math.hypot(p.x - p.nestX, p.y - p.nestY);
+                if (distToNest < 2) {
+                     p.hunger = Math.max(0, p.hunger - 0.5);
+                }
+                bestTile = {x: p.x + Math.sign(p.nestX-p.x), y: p.y + Math.sign(p.nestY-p.y), score: 1};
+            }
+            p.x = bestTile.x; p.y = bestTile.y;
+
+            const ix = Math.floor(p.x), iy = Math.floor(p.y);
+            if(ix >=0 && ix < MAP_WIDTH && iy >= 0 && iy < MAP_HEIGHT) {
+                const eaten = mackerel.findIndex(m => !deadMackerel.has(m.id) && Math.hypot(p.x-m.x, p.y-m.y) < 1.5);
+                if(eaten !== -1) { p.hunger = 0; p.satiated = 10; deadMackerel.add(mackerel[eaten].id); }
+
+                if (isMatingSeason && !p.hasMatedThisYear && Math.hypot(p.x - p.nestX, p.y-p.nestY) < 2 && p.age > YEAR_LENGTH && p.age < 15 * YEAR_LENGTH && p.hunger < 50 && Math.random() < 0.04) {
+                    p.hasMatedThisYear = true; newBirths.push({ type: 'seagull', nestX: p.nestX, nestY: p.nestY, color: [224 + (Math.random() - 0.5) * 30, 224 + (Math.random() - 0.5) * 30, 224 + (Math.random() - 0.5) * 30] });
+                }
+            }
+            if(p.hunger > 100 || p.age > 18 * YEAR_LENGTH) seagulls.splice(i, 1);
+        }
+ 
+        if(deadMackerel.size > 0) mackerel = mackerel.filter(m => !deadMackerel.has(m.id));
+ 
+        newBirths.forEach(birth => {
+            const color = [birth.color[0] + (Math.random() - 0.5) * 10, birth.color[1] + (Math.random() - 0.5) * 10, birth.color[2] + (Math.random() - 0.5) * 10];
+            if (birth.type === 'deer') deer.push({ id: crypto.randomUUID(), x: birth.x, y: birth.y, hunger: 50, thirst: 50, age: 0, hasMatedThisYear: true, color });
+            else if (birth.type === 'wolf') wolves.push({ id: crypto.randomUUID(), x: birth.x, y: birth.y, hunger: 50, thirst: 50, age: 0, satiated: 0, hasMatedThisYear: true, color });
+            else if (birth.type === 'mackerel') mackerel.push({ id: crypto.randomUUID(), x: birth.x, y: birth.y, hunger: 20, age: 0, hasMatedThisYear: true, color});
+            else if (birth.type === 'seal') seals.push({ id: crypto.randomUUID(), x: birth.x, y: birth.y, hunger: 50, age: 0, onLand: true, satiated: 0, hasMatedThisYear: true, color});
+            else if (birth.type === 'seagull') seagulls.push({id: crypto.randomUUID(), x: birth.nestX, y: birth.nestY, hunger: 40, age: 0, nestX: birth.nestX, nestY: birth.nestY, satiated: 0, hasMatedThisYear: true, color});
+        });
+
+        if (mackerel.length > 1500) {
+            mackerel.splice(0, mackerel.length - 1200);
+        }
+    }
+
+    // --- MAIN SIMULATION & RENDER LOOPS ---
+    function simulationTick() {
+        day++;
+        const currentSeason = getSeasonName();
+        updateWeather();
+        updateCloudsAndWeather();
+        updateSurfaceWater();
+        updateFauna();
+        updateFlora();
+        updateVegetationHealth();
+        updateIce();
+        updateWaterFlow();
+        if(day % 30 === 0) updateErosion();
+        if (day % YEAR_LENGTH === 0) updateEcology();
+        dayEl.textContent = day;
+        seasonEl.textContent = currentSeason;
+        deerPopEl.textContent = deer.length;
+        wolfPopEl.textContent = wolves.length;
+        puffinPopEl.textContent = seagulls.length;
+        sealPopEl.textContent = seals.length;
+        mackerelPopEl.textContent = mackerel.length;
+    }
+    
+    function getSeasonName() {
+        const dayInYear = (day - 1) % YEAR_LENGTH;
+        if (dayInYear < 91) return 'Spring';
+        if (dayInYear < 182) return 'Summer';
+        if (dayInYear < 273) return 'Autumn';
+        return 'Winter';
+    }
+
+    function renderLoop() {
+        const currentSeason = getSeasonName();
+        if (currentSeason !== lastSeason || day % 5 === 0) {
+             staticMapDirty = true;
+             lastSeason = currentSeason;
+        }
+        updateCurrentParticles();
+        drawMap();
+        requestAnimationFrame(renderLoop);
+    }
+
+    // --- EVENT LISTENERS & INITIALIZATION ---
+    function handleResize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        view.offsetX = (canvas.width - MAP_WIDTH * view.zoom) / 2;
+        view.offsetY = (canvas.height - MAP_HEIGHT * view.zoom) / 2;
+    }
+    
+    function setupSimulation() {
+        if (simulationInterval) clearInterval(simulationInterval);
+        const speed = 1050 / speedSlider.value;
+        simulationInterval = setInterval(simulationTick, speed);
+    }
+
+    function changeView() {
+        const currentView = viewModeSelect.value;
+        terrainLegend.classList.toggle('hidden', currentView !== 'terrain' && currentView !== 'fauna');
+        faunaLegend.classList.toggle('hidden', currentView !== 'fauna');
+        tempLegend.classList.toggle('hidden', currentView !== 'temp');
+        weatherLegend.classList.toggle('hidden', currentView !== 'weather');
+        flowLegend.classList.toggle('hidden', currentView !== 'flow');
+        groundwaterLegend.classList.toggle('hidden', currentView !== 'groundwater');
+        currentsLegend.classList.toggle('hidden', currentView !== 'currents');
+    }
+    
+    speedSlider.addEventListener('input', setupSimulation);
+    viewModeSelect.addEventListener('change', changeView);
+    oceanCurrentSelect.addEventListener('change', initializeOceanCurrents);
+    regenButton.addEventListener('click', () => {
+        if (regenButton.classList.contains('loading')) return;
+        day = 1;
+        lastSeason = '';
+        generateMap();
+    });
+    toggleUiButton.addEventListener('click', () => { uiOverlay.classList.toggle('visible'); });
+    hoverDebugCheckbox.addEventListener('change', () => { if (!hoverDebugCheckbox.checked) tooltipEl.classList.add('hidden');});
+
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const worldX = (mouseX - view.offsetX) / view.zoom;
+        const worldY = (mouseY - view.offsetY) / view.zoom;
+        const zoomFactor = 0.9;
+        const newZoom = e.deltaY > 0 ? view.zoom * zoomFactor : view.zoom / zoomFactor;
+        view.zoom = Math.max(0.5, Math.min(50, newZoom));
+        view.offsetX = mouseX - worldX * view.zoom;
+        view.offsetY = mouseY - worldY * view.zoom;
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        view.isPanning = true;
+        view.panStart.x = e.clientX - view.offsetX;
+        view.panStart.y = e.clientY - view.offsetY;
+        canvas.style.cursor = 'grabbing';
+    });
+    
+    canvas.addEventListener('mouseup', () => { view.isPanning = false; canvas.style.cursor = 'grab'; });
+    canvas.addEventListener('mouseleave', () => { view.isPanning = false; canvas.style.cursor = 'default'; tooltipEl.classList.add('hidden');});
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (view.isPanning) {
+            view.offsetX = e.clientX - view.panStart.x;
+            view.offsetY = e.clientY - view.panStart.y;
+        } else {
+            canvas.style.cursor = 'grab';
+        }
+
+        if (hoverDebugCheckbox.checked) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mapX = Math.floor((mouseX - view.offsetX) / view.zoom);
+            const mapY = Math.floor((mouseY - view.offsetY) / view.zoom);
+
+            if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT) {
+                const biome = getBiome(elevationMap[mapY][mapX]);
+                let riverText = (riverMap[mapY][mapX] === 1) ? "River" : (riverMap[mapY][mapX] === 2) ? "Lake" : "None";
+                const deerOnTile = deer.filter(d => Math.floor(d.x) === mapX && Math.floor(d.y) === mapY).length;
+                const wolvesOnTile = wolves.filter(w => Math.floor(w.x) === mapX && Math.floor(w.y) === mapY).length;
+                tooltipEl.innerHTML = `
+                    <div class="grid grid-cols-2 gap-x-2">
+                        <span>Coords:</span><span>${mapX}, ${mapY}</span>
+                        <span>Biome:</span><span>${biome.name}</span>
+                        <span>Health:</span><span>${vegetationHealthMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Elevation:</span><span>${elevationMap[mapY][mapX].toFixed(3)}</span>
+                        <span>Temp:</span><span>${temperatureMap[mapY][mapX].toFixed(1)}°C</span>
+                        <span>Cloud:</span><span>${(cloudMap[mapY][mapX] * 100).toFixed(0)}%</span>
+                        <span>Snow:</span><span>${snowMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Water:</span><span>${waterMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Groundwater:</span><span>${groundwaterMap[mapY][mapX].toFixed(2)}</span>
+                        <span>River/Lake:</span><span>${riverText}</span>
+                        <span>Ice:</span><span>${iceMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Salinity:</span><span>${salinityMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Forest:</span><span>${(forestMap[mapY][mapX] * 100).toFixed(0)}%</span>
+                        ${deerOnTile > 0 ? `<span>Deer:</span><span>${deerOnTile}</span>` : ''}
+                        ${wolvesOnTile > 0 ? `<span>Wolves:</span><span>${wolvesOnTile}</span>` : ''}
+                    </div>`;
+                const tooltipRect = tooltipEl.getBoundingClientRect();
+                let newX = e.clientX + 15;
+                let newY = e.clientY + 15;
+                if (newX + tooltipRect.width > window.innerWidth) newX = e.clientX - tooltipRect.width - 15;
+                if (newY + tooltipRect.height > window.innerHeight) newY = e.clientY - tooltipRect.height - 15;
+                tooltipEl.style.left = `${newX}px`;
+                tooltipEl.style.top = `${newY}px`;
+                tooltipEl.classList.remove('hidden');
+            } else {
+                tooltipEl.classList.add('hidden');
+            }
+        }
+    });
+    
+    window.addEventListener('resize', handleResize);
+    
+    // Initial setup
+    generateMap();
+    handleResize();
+    setupSimulation();
+    changeView();
+    renderLoop();
+
+</script>
+
+</body>
+</html>
+
