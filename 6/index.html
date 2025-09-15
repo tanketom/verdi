@@ -1,0 +1,2187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Island Topography and Weather Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+        }
+        #mapCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        #ui-overlay {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            width: 300px;
+            max-height: calc(100vh - 2rem);
+            overflow-y: auto;
+            z-index: 10;
+            background-color: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            transform: translateX(100%);
+            opacity: 0;
+            visibility: hidden;
+        }
+        #ui-overlay.visible {
+            transform: translateX(0);
+            opacity: 1;
+            visibility: visible;
+        }
+        #toggle-ui-button {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 11;
+            background-color: rgba(31, 41, 55, 0.8);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.5s ease-in-out;
+        }
+        #ui-overlay.visible + #toggle-ui-button {
+            transform: translateX(-316px);
+        }
+        #regenButton .spinner { display: none; }
+        #regenButton.loading .spinner { display: inline-block; }
+        #regenButton.loading .button-text { display: none; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <canvas id="mapCanvas"></canvas>
+
+    <div id="tooltip" class="hidden fixed z-20 p-3 bg-gray-900/80 text-white text-xs rounded-lg shadow-lg pointer-events-none font-mono" style="backdrop-filter: blur(5px);"></div>
+
+    <div id="ui-overlay">
+        <div class="w-full">
+            <h1 class="text-xl font-bold text-center mb-4 text-cyan-300">Island Simulation</h1>
+            
+            <div class="bg-gray-700/50 rounded-lg p-4 info-panel">
+                <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2 text-cyan-400">Simulation Status</h2>
+                <div class="space-y-3">
+                    <div><span class="font-bold text-gray-300">Day:</span><span id="day" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">1</span></div>
+                    <div><span class="font-bold text-gray-300">Season:</span><span id="season" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">Spring</span></div>
+                    <div><span class="font-bold text-gray-300">Weather:</span><span id="weather" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">Clear</span></div>
+                    <div><span class="font-bold text-gray-300">Avg. Temp:</span><span id="avgTemp" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">15°C</span></div>
+                </div>
+            </div>
+
+            <div id="civilization-panel" class="bg-gray-700/50 rounded-lg p-4 mt-6 info-panel">
+                <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2 text-cyan-400">Civilization</h2>
+                <div class="space-y-3">
+                    <div><span class="font-bold text-gray-300">Population:</span><span id="population-total" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                </div>
+            </div>
+
+            <div id="ecosystem-panel" class="bg-gray-700/50 rounded-lg p-4 mt-6 info-panel">
+                <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2 text-cyan-400">Ecosystem</h2>
+                <div class="space-y-3">
+                    <div><span class="font-bold text-gray-300">Seagulls:</span><span id="seagull-pop" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                    <div><span class="font-bold text-gray-300">Mackerel:</span><span id="mackerel-pop" class="float-right font-mono bg-gray-800 px-2 py-1 rounded">0</span></div>
+                </div>
+            </div>
+
+            <div class="bg-gray-700/50 rounded-lg p-4 mt-6 info-panel">
+                <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2 text-cyan-400">Controls</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between"><label for="speed" class="font-semibold text-gray-300">Sim Speed:</label><input type="range" id="speed" min="1" max="50" value="10" class="w-2/3 accent-cyan-500"></div>
+                    <div class="flex items-center justify-between"><label for="viewMode" class="font-semibold text-gray-300">View:</label><select id="viewMode" class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 w-2/3"><option value="terrain">Terrain</option><option value="civilization">Civilization</option><option value="trade">Trade</option><option value="road">Roads</option><option value="temp">Temperature</option><option value="weather">Weather</option><option value="flow">Water Flow</option><option value="groundwater">Groundwater</option><option value="currents">Ocean Current</option></select></div>
+                    <div class="flex items-center justify-between"><label for="oceanCurrent" class="font-semibold text-gray-300">Ocean Current:</label><select id="oceanCurrent" class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 w-2/3"><option value="tempered" selected>Tempered</option><option value="warm">Warm</option><option value="cold">Cold</option><option value="none">None</option></select></div>
+                    <div class="flex items-center justify-between"><label for="hoverDebug" class="font-semibold text-gray-300">Hover Debug:</label><input type="checkbox" id="hoverDebug" class="accent-cyan-500 h-5 w-5"></div>
+                    <button id="regenButton" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center">
+                        <svg class="spinner animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span class="button-text">New Island</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="terrain-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Terrain Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #003366;"></div><span>Deep Ocean</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #006699;"></div><span>Ocean</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #E0D5A3;"></div><span>Beach</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #55a630;"></div><span>Lowlands</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #ad9465;"></div><span>Farmland</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #2b9348;"></div><span>Hills</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #0d370d;"></div><span>Forest</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #808080;"></div><span>Mountain</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #B0B0B0;"></div><span>Peak</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #aed6f1;"></div><span>Ice</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #dc2626;"></div><span>Settlement</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #a855f7;"></div><span>Port</span></div>
+                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #4a4a4a;"></div><span>Road</span></div>
+                </div>
+            </div>
+             <div id="civilization-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Civilization Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #dc2626;"></div><span>Settlement</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #ad9465;"></div><span>Farmland</span></div>
+                </div>
+                 <div class="text-sm text-center mt-2">
+                    <span>Population Density</span>
+                    <div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, rgba(255, 255, 100, 0.1), rgba(255, 255, 100, 0.8));"></div>
+                </div>
+            </div>
+             <div id="trade-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Trade Legend</h3>
+                 <div class="text-sm text-center mt-2">
+                    <span>Settlement Wealth</span>
+                    <div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #ef4444, #eab308, #22c55e);"></div>
+                    <div class="flex justify-between text-xs"><span>Poor</span><span>Rich</span></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-sm mt-2">
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded-full" style="background-color: rgba(255,255,255,0.5);"></div><span>Trade Route</span></div>
+                </div>
+            </div>
+            <div id="road-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Road Legend</h3>
+                 <div class="text-sm text-center mt-2">
+                    <span>Potential Trade Routes</span>
+                    <div class="w-full h-2 rounded-full" style="background-color: rgba(255, 255, 255, 0.7);"></div>
+                </div>
+            </div>
+            <div id="temp-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Temperature Legend (°C)</h3>
+                <div class="flex justify-center items-center space-x-2 text-sm text-center"><span class="font-mono">&lt;-10</span><div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #00ffff, #00ff00, #ffff00, #ff8000, #ff0000);"></div><span class="font-mono">40+</span></div>
+            </div>
+            <div id="weather-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Weather Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(255,255,255,0.4);"></div><span>Clouds</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(100, 150, 255, 0.6);"></div><span>Rainfall</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(220, 220, 255, 0.7);"></div><span>Snowfall</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(255, 255, 255, 0.6);"></div><span>Snow Cover</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: rgba(52, 152, 219, 0.5);"></div><span>Surface Water</span></div>
+                </div>
+                <div class="flex items-center space-x-2 text-sm text-center mt-2"><span>Cloud Density:</span><div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #222, #fff);"></div></div>
+            </div>
+            <div id="flow-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Water Flow Legend</h3>
+                <div class="flex justify-center items-center space-x-2 text-sm text-center">
+                    <span class="font-mono">Dry</span>
+                    <div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #333, #3498db, #87CEEB);"></div>
+                    <span class="font-mono">Saturated</span>
+                </div>
+            </div>
+             <div id="groundwater-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Groundwater Legend</h3>
+                <div class="flex justify-center items-center space-x-2 text-sm text-center">
+                    <span class="font-mono">Dry</span>
+                    <div class="w-full h-4 rounded-full" style="background: linear-gradient(to right, #a16a2d, #5289ad, #3498db);"></div>
+                    <span class="font-mono">Saturated</span>
+                </div>
+            </div>
+             <div id="currents-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
+                <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Ocean Current Legend</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #ff6b6b;"></div><span>Warm Current</span></div>
+                    <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #4db8ff;"></div><span>Cold Current</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <button id="toggle-ui-button" title="Toggle UI panels">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+    </button>
+
+<script>
+    // --- DOM ELEMENT REFERENCES ---
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+    const dayEl = document.getElementById('day');
+    const seasonEl = document.getElementById('season');
+    const weatherEl = document.getElementById('weather');
+    const avgTempEl = document.getElementById('avgTemp');
+    const seagullPopEl = document.getElementById('seagull-pop');
+    const mackerelPopEl = document.getElementById('mackerel-pop');
+    const populationTotalEl = document.getElementById('population-total');
+    const speedSlider = document.getElementById('speed');
+    const viewModeSelect = document.getElementById('viewMode');
+    const oceanCurrentSelect = document.getElementById('oceanCurrent');
+    const regenButton = document.getElementById('regenButton');
+    const terrainLegend = document.getElementById('terrain-legend');
+    const civilizationLegend = document.getElementById('civilization-legend');
+    const tradeLegend = document.getElementById('trade-legend');
+    const roadLegend = document.getElementById('road-legend');
+    const tempLegend = document.getElementById('temp-legend');
+    const weatherLegend = document.getElementById('weather-legend');
+    const flowLegend = document.getElementById('flow-legend');
+    const groundwaterLegend = document.getElementById('groundwater-legend');
+    const currentsLegend = document.getElementById('currents-legend');
+    const uiOverlay = document.getElementById('ui-overlay');
+    const toggleUiButton = document.getElementById('toggle-ui-button');
+    const hoverDebugCheckbox = document.getElementById('hoverDebug');
+    const tooltipEl = document.getElementById('tooltip');
+
+    // --- CONSTANTS & CONFIG ---
+    const MAP_WIDTH = 200;
+    const MAP_HEIGHT = 100;
+    const CHUNK_SIZE = 16;
+    const YEAR_LENGTH = 365;
+    const TICKS_PER_DAY = 5;
+    const TEMP_AVG = 12.5;
+    const TEMP_AMPLITUDE = 17.5; 
+    const MACKEREL_START_POP = 300;
+    const SEAGULL_START_POP = 40;
+    const NUM_SETTLEMENTS = 3;
+    const HUMAN_TILE_TYPES = {
+        SETTLEMENT: 1,
+        FARMLAND: 2,
+        PORT: 3
+    };
+
+    // --- VIEW & STATE VARIABLES ---
+    let view = { zoom: 4, offsetX: 0, offsetY: 0, isPanning: false, panStart: { x: 0, y: 0 } };
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = MAP_WIDTH;
+    offscreenCanvas.height = MAP_HEIGHT;
+    const offscreenCtx = offscreenCanvas.getContext('2d');
+    let staticMapDirty = true;
+    let day = 1;
+    let tickCounter = 0;
+    let simulationInterval;
+    let terrainNoise = new SimplexNoise();
+    let weatherNoise = new SimplexNoise(Math.random());
+    let currentNoise = new SimplexNoise(Math.random());
+    let cloudOffsetX = Math.random() * 1000;
+    let lastSeason = '';
+    let activeChunks = new Set();
+    
+    // --- DATA MAPS ---
+    let elevationMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let temperatureMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let cloudMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let snowMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let waterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0)); 
+    let groundwaterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let iceMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let forestMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let oceanCurrentMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill({ x: 0, y: 0, temp: 0 }));
+    let currentParticles = [];
+    let vegetationHealthMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(1.0));
+    let annualPrecipitationMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let islandTiles = [];
+    let mackerel = [];
+    let seagulls = [];
+    let settlements = [];
+    let humanMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(null));
+    let pathUsageMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+    let ship = null;
+    let tradeShips = [];
+    let fishingBoats = [];
+    let traders = [];
+    let potentialTradeRoutes = [];
+    
+    // --- NAME GENERATION ---
+    const NAME_PREFIXES = ["Stone", "Iron", "Clear", "North", "South", "East", "West", "Fair", "High", "Low", "Oak", "Pine", "Elk", "River", "Lake"];
+    const NAME_SUFFIXES = ["wood", "haven", "stead", "gard", "by", "port", "fall", "view", "dale", "wick", "thorp"];
+
+    function generateSettlementName() {
+        let name;
+        let attempts = 0;
+        do {
+            const prefix = NAME_PREFIXES[Math.floor(Math.random() * NAME_PREFIXES.length)];
+            const suffix = NAME_SUFFIXES[Math.floor(Math.random() * NAME_SUFFIXES.length)];
+            name = `${prefix}${suffix}`;
+            attempts++;
+        } while (settlements.some(s => s.name === name) && attempts < 50); // Avoid duplicate names
+        return name;
+    }
+
+    // --- BIOME DEFINITIONS ---
+    const BIOMES = {
+        DEEP_OCEAN: { name: 'Deep Ocean', threshold: 0.3, color: [0, 51, 102], resistance: 1000 },
+        OCEAN: { name: 'Ocean', threshold: 0.45, color: [0, 102, 153], resistance: 1000 },
+        BEACH: { name: 'Beach', threshold: 0.5, color: [224, 213, 163], resistance: 10 },
+        LOWLANDS: { name: 'Lowlands', threshold: 0.7, color: { summer: [85, 166, 48], spring: [128, 185, 24], winter: [176, 160, 134] }, resistance: 2 },
+        HILLS: { name: 'Hills', threshold: 0.85, color: { summer: [43, 147, 72], spring: [85, 166, 50], winter: [138, 122, 97] }, resistance: 20 },
+        MOUNTAIN: { name: 'Mountain', threshold: 0.95, color: [128, 128, 128], resistance: 100 },
+        PEAK: { name: 'Peak', threshold: 1.0, color: [176, 176, 176], resistance: 200 },
+        HAMLET: { name: 'Settlement', color: [220, 38, 38] }, 
+        FARMLAND: { name: 'Farmland', color: [173, 148, 101] },
+        PORT: { name: 'Port', color: [168, 85, 247] },
+        ROAD: { name: 'Road', color: [74, 74, 74] },
+    };
+
+    const AUTUMN_FOREST_COLORS = [[217, 95, 2], [253, 141, 60], [230, 85, 13], [166, 54, 3]];
+    const AUTUMN_GRASS_COLORS = [[255, 224, 130], [255, 214, 100], [240, 200, 90], [220, 180, 80]];
+    const DROUGHT_COLOR = [189, 178, 133];
+
+    // --- UTILITY FUNCTIONS ---
+    function lerpColor(color1, color2, factor) {
+        if (!color1 || !color2) return [0,0,0]; 
+        factor = Math.max(0, Math.min(1, factor));
+        const r = color1[0] + factor * (color2[0] - color1[0]);
+        const g = color1[1] + factor * (color2[1] - color1[1]);
+        const b = color1[2] + factor * (color2[2] - color1[2]);
+        return [r, g, b];
+    }
+    
+    function getSeasonalTerrainColor(biome, dayOfYear, x, y) {
+        const seasonLength = YEAR_LENGTH / 4;
+        
+        const summerColor = biome.color.summer || biome.color;
+        const springColor = biome.color.spring || summerColor;
+        const winterColor = biome.color.winter || [176, 160, 134];
+
+        let fromColor, toColor, progress;
+        
+        if (dayOfYear < seasonLength) { // Spring
+            progress = dayOfYear / seasonLength;
+            fromColor = winterColor;
+            toColor = springColor;
+        } else if (dayOfYear < seasonLength * 2) { // Summer
+            progress = (dayOfYear - seasonLength) / seasonLength;
+            fromColor = springColor;
+            toColor = summerColor;
+        } else if (dayOfYear < seasonLength * 3) { // Autumn
+            progress = (dayOfYear - seasonLength * 2) / seasonLength;
+            const isForested = forestMap[y][x] > 0.1;
+            const autumnTargetPalette = isForested ? AUTUMN_FOREST_COLORS : AUTUMN_GRASS_COLORS;
+            const noise = (weatherNoise.noise2D(x / 5, y / 5) + 1) / 2;
+            const autumnColor = autumnTargetPalette[Math.floor(noise * autumnTargetPalette.length)];
+            fromColor = summerColor;
+            toColor = autumnColor;
+        } else { // Winter
+            progress = (dayOfYear - seasonLength * 3) / seasonLength;
+            const isForested = forestMap[y][x] > 0.1;
+            const autumnTargetPalette = isForested ? AUTUMN_FOREST_COLORS : AUTUMN_GRASS_COLORS;
+            const noise = (weatherNoise.noise2D(x / 5, y / 5) + 1) / 2;
+            const autumnColor = autumnTargetPalette[Math.floor(noise * autumnTargetPalette.length)];
+            fromColor = autumnColor;
+            toColor = winterColor;
+        }
+        
+        let seasonalColor = lerpColor(fromColor, toColor, progress);
+        
+        const health = vegetationHealthMap[y][x];
+        if (health < 1.0) {
+            seasonalColor = lerpColor(DROUGHT_COLOR, seasonalColor, health);
+        }
+
+        return `rgb(${Math.floor(seasonalColor[0])}, ${Math.floor(seasonalColor[1])}, ${Math.floor(seasonalColor[2])})`;
+    }
+
+    // --- INITIALIZATION & GENERATION ---
+    function initializeSalinity() {
+        salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold) salinityMap[y][x] = 1.0;
+                else if (riverMap[y][x] > 0) salinityMap[y][x] = 0.0;
+            }
+        }
+        for (let i = 0; i < 5; i++) {
+            let nextSalinityMap = salinityMap.map(arr => arr.slice());
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    if (riverMap[y][x] > 0) continue;
+                    let neighborSum = 0, neighborCount = 0;
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                neighborSum += salinityMap[ny][nx];
+                                neighborCount++;
+                            }
+                        }
+                    if(neighborCount > 0) nextSalinityMap[y][x] = neighborSum / neighborCount;
+                }
+            }
+            salinityMap = nextSalinityMap;
+        }
+    }
+
+    function initializeOceanCurrents() {
+        const currentType = oceanCurrentSelect.value;
+        if (currentType === 'none') {
+            oceanCurrentMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill({ x: 0, y: 0, temp: 0 }));
+            currentParticles = [];
+            return;
+        }
+
+        const tempModifier = currentType === 'warm' ? 5 : (currentType === 'cold' ? -5 : -2);
+        const gyreStrength = 0.2;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold) {
+                    const dy = -(y - MAP_HEIGHT / 2);
+                    const dx = x - MAP_WIDTH / 2;
+                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const noise = currentNoise.noise2D(x / 20, y / 20) * 0.3;
+                    const vecX = (-dy / len) * gyreStrength + noise;
+                    const vecY = (dx / len) * gyreStrength + noise;
+                    oceanCurrentMap[y][x] = { x: vecX, y: vecY, temp: tempModifier };
+                } else {
+                     oceanCurrentMap[y][x] = { x: 0, y: 0, temp: 0 };
+                }
+            }
+        }
+        
+        currentParticles = [];
+        for (let i = 0; i < 500; i++) {
+            const x = Math.random() * MAP_WIDTH;
+            const y = Math.random() * MAP_HEIGHT;
+            if (elevationMap[Math.floor(y)][Math.floor(x)] <= BIOMES.OCEAN.threshold) {
+                 currentParticles.push({ x, y, age: Math.random() * 100 });
+            }
+        }
+    }
+
+    function initializeFauna() {
+        mackerel = []; 
+        seagulls = [];
+
+        const oceanSpawns = [];
+        for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) if(elevationMap[y][x] > BIOMES.DEEP_OCEAN.threshold && elevationMap[y][x] <= BIOMES.OCEAN.threshold) oceanSpawns.push({x,y});
+
+        for(let i = 0; i < MACKEREL_START_POP && oceanSpawns.length > 0; i++) {
+            const spawn = oceanSpawns[Math.floor(Math.random() * oceanSpawns.length)];
+            mackerel.push({ id: crypto.randomUUID(), x: spawn.x, y: spawn.y });
+        }
+        
+        const coastalSpawns = islandTiles.filter(t => {
+            const biome = getBiome(elevationMap[t.y][t.x], t.x, t.y);
+            if (biome !== BIOMES.HILLS && biome !== BIOMES.BEACH) return false;
+            for(let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                const nx = t.x + dx, ny = t.y + dy;
+                if(nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) return true;
+            }
+            return false;
+        });
+
+        for(let i = 0; i < SEAGULL_START_POP && coastalSpawns.length > 0; i++) {
+            const spawn = coastalSpawns[Math.floor(Math.random() * coastalSpawns.length)];
+            seagulls.push({id: crypto.randomUUID(), x: spawn.x, y: spawn.y, nestX: spawn.x, nestY: spawn.y, target: null});
+        }
+    }
+
+    function initializeCivilization() {
+        settlements = [];
+        humanMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(null));
+        pathUsageMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        ship = null;
+        tradeShips = [];
+        fishingBoats = [];
+        traders = [];
+        potentialTradeRoutes = [];
+
+        // First settlement MUST be coastal
+        const firstLocation = findSettlementLocation(true);
+        if (firstLocation) {
+            createSettlement(firstLocation);
+        }
+
+        // Other settlements
+        for (let i = 1; i < NUM_SETTLEMENTS; i++) {
+            const location = findSettlementLocation(false);
+            if (location) {
+                createSettlement(location);
+            } else {
+                break;
+            }
+        }
+
+        if (settlements.length > 0) {
+            const firstSettlement = settlements.find(s => s.port);
+            if(firstSettlement) {
+                const startPos = {x: 0, y: Math.floor(MAP_HEIGHT / 2)};
+                ship = {
+                    id: crypto.randomUUID(), x: startPos.x, y: startPos.y,
+                    path: findPath(startPos, firstSettlement.port, true),
+                    progress: 0, type: 'settler'
+                }
+            }
+        }
+        
+        // Calculate potential trade routes for the Road View
+        for (let i = 0; i < settlements.length; i++) {
+            for (let j = i + 1; j < settlements.length; j++) {
+                const s1 = settlements[i];
+                const s2 = settlements[j];
+                const path = findPath(s1.tiles[0], s2.tiles[0], false); // false for land path
+                if (path) {
+                    potentialTradeRoutes.push(path);
+                }
+            }
+        }
+
+        staticMapDirty = true;
+    }
+
+    function createSettlement(location) {
+        const id = crypto.randomUUID();
+        const newSettlement = {
+            id: id, name: generateSettlementName(),
+            tiles: [{x: location.x, y: location.y, type: HUMAN_TILE_TYPES.SETTLEMENT }],
+            population: 10, food: 100, wood: 50, goods: 10,
+            happiness: 1.0, port: null, migrants: 0,
+        };
+        settlements.push(newSettlement);
+        humanMap[location.y][location.x] = {type: HUMAN_TILE_TYPES.SETTLEMENT, id: id};
+        establishPort(newSettlement);
+    }
+
+
+    function findSettlementLocation(mustBeCoastal = false) {
+        let bestLocation = null;
+        let maxScore = -Infinity;
+
+        for (let y = 1; y < MAP_HEIGHT - 1; y++) {
+            for (let x = 1; x < MAP_WIDTH - 1; x++) {
+                if (getBiome(elevationMap[y][x], x, y) !== BIOMES.LOWLANDS || (humanMap[y][x] && humanMap[y][x].type === HUMAN_TILE_TYPES.SETTLEMENT)) continue;
+
+                let isNearFreshwater = false;
+                let isNearCoast = false;
+
+                for (let dy = -3; dy <= 3; dy++) {
+                    for (let dx = -3; dx <= 3; dx++) {
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                            if (riverMap[ny][nx] > 0) isNearFreshwater = true;
+                            if (getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.OCEAN) isNearCoast = true;
+                        }
+                    }
+                }
+
+                if (mustBeCoastal && !isNearCoast) continue;
+                if (!isNearFreshwater) continue;
+                
+                let score = 100;
+
+                let avgFertility = 0;
+                let count = 0;
+                for (let dy = -5; dy <= 5; dy++) {
+                    for (let dx = -5; dx <= 5; dx++) {
+                         const nx = x + dx;
+                         const ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.LOWLANDS) {
+                            avgFertility += vegetationHealthMap[ny][nx];
+                            count++;
+                        }
+                    }
+                }
+                if (count > 0) score += (avgFertility / count) * 50;
+                
+                let minDistanceToSettlement = Infinity;
+                settlements.forEach(s => {
+                    const dist = Math.hypot(x - s.tiles[0].x, y - s.tiles[0].y);
+                    if(dist < minDistanceToSettlement) minDistanceToSettlement = dist;
+                });
+                
+                if (minDistanceToSettlement < 20) {
+                    score -= 50000 * (20 - minDistanceToSettlement);
+                }
+                
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestLocation = { x, y };
+                }
+            }
+        }
+        return bestLocation;
+    }
+    
+    function generateRiversAndLakes() {
+        riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        let lakeOutlets = [];
+        const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+        const basinThreshold = BIOMES.HILLS.threshold;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (!visited[y][x] && elevationMap[y][x] >= basinThreshold) {
+                    const basinCells = [];
+                    const boundaryCells = new Map();
+                    const queue = [{x, y}];
+                    visited[y][x] = true;
+                    let lowestOutlet = { x: -1, y: -1, elevation: Infinity };
+                    while(queue.length > 0) {
+                        const cell = queue.shift();
+                        basinCells.push(cell);
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = cell.x + dx, ny = cell.y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                if (!visited[ny][nx]) {
+                                    if (elevationMap[ny][nx] >= basinThreshold) {
+                                        visited[ny][nx] = true;
+                                        queue.push({x: nx, y: ny});
+                                    } else {
+                                        boundaryCells.set(`${nx},${ny}`, {x: nx, y: ny});
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (basinCells.length < 5) continue;
+                    for(const bCell of boundaryCells.values()) if(elevationMap[bCell.y][bCell.x] < lowestOutlet.elevation) lowestOutlet = { x: bCell.x, y: bCell.y, elevation: elevationMap[bCell.y][bCell.x] };
+                    if (lowestOutlet.x !== -1) {
+                         for(const basinCell of basinCells) if(elevationMap[basinCell.y][basinCell.x] < lowestOutlet.elevation) {
+                            riverMap[basinCell.y][basinCell.x] = 2;
+                            elevationMap[basinCell.y][basinCell.x] = lowestOutlet.elevation;
+                         }
+                         lakeOutlets.push({x: lowestOutlet.x, y: lowestOutlet.y});
+                    }
+                }
+            }
+        }
+        
+        for (const startPoint of lakeOutlets) {
+            let cx = startPoint.x, cy = startPoint.y;
+            for (let len = 0; len < 2000; len++) {
+                if (riverMap[cy][cx] === 0) riverMap[cy][cx] = 1;
+                if (elevationMap[cy][cx] <= BIOMES.OCEAN.threshold) break;
+                let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[cy][cx] };
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = cx + dx, ny = cy + dy;
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] < lowestNeighbor.elevation) {
+                        lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
+                    }
+                }
+                if (lowestNeighbor.x === -1) break; 
+                cx = lowestNeighbor.x; cy = lowestNeighbor.y;
+            }
+        }
+    }
+
+    function preGrowForests() {
+        forestMap.forEach(row => row.fill(0));
+        const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (elevationMap[y][x] > BIOMES.OCEAN.threshold && !visited[y][x]) {
+                    const currentIslandTiles = [];
+                    const queue = [{x, y}];
+                    visited[y][x] = true;
+                    while(queue.length > 0) {
+                        const cell = queue.shift();
+                        currentIslandTiles.push(cell);
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            const nx = cell.x + dx, ny = cell.y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && !visited[ny][nx] && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
+                                visited[ny][nx] = true;
+                                queue.push({x: nx, y: ny});
+                            }
+                        }
+                    }
+                    
+                    if (currentIslandTiles.length > 100) {
+                        let suitabilityMap = new Map();
+                        let potentialSpots = [];
+                        let maxSuitability = 0;
+                        for (const tile of currentIslandTiles) {
+                            const { x: tx, y: ty } = tile;
+                            const elevation = elevationMap[ty][tx];
+                            let suitability = 0;
+                            const isHabitable = elevation > BIOMES.LOWLANDS.threshold * 0.95 && elevation < BIOMES.MOUNTAIN.threshold;
+                            if (isHabitable) {
+                                suitability = 0.5;
+                                if (tx > 0) {
+                                    const slope = elevation - elevationMap[ty][tx - 1];
+                                    if (slope > 0.01) suitability += slope * 15;
+                                }
+                                if (tx < MAP_WIDTH - 1 && Math.abs(elevation - elevationMap[ty][tx + 1]) > 0.1) suitability = 0;
+                            }
+                            if(suitability > 0) {
+                                suitabilityMap.set(`${tx},${ty}`, suitability);
+                                potentialSpots.push({x: tx, y: ty, suitability});
+                                if (suitability > maxSuitability) maxSuitability = suitability;
+                            }
+                        }
+                        const seedSpots = potentialSpots.filter(s => s.suitability > maxSuitability * 0.3);
+                        for(const spot of seedSpots) {
+                            if(forestMap[spot.y][spot.x] > 0.5) continue;
+                            const forestQueue = [{ x: spot.x, y: spot.y, density: 1.0 }];
+                            const forestVisited = new Set([`${spot.x},${spot.y}`]);
+                            forestMap[spot.y][spot.x] = 1.0;
+                            while (forestQueue.length > 0) {
+                                forestQueue.sort((a, b) => b.density - a.density);
+                                const { x: fx, y: fy, density } = forestQueue.shift();
+                                if (density < 0.2) continue;
+                                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                                    if (dx === 0 && dy === 0) continue;
+                                    const nx = fx + dx, ny = fy + dy;
+                                    const key = `${nx},${ny}`;
+                                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && !forestVisited.has(key)) {
+                                        forestVisited.add(key);
+                                        const neighborSuitability = suitabilityMap.get(key) || 0;
+                                        if (neighborSuitability > 0.1) {
+                                            const newDensity = density * (neighborSuitability / maxSuitability) * 0.9;
+                                            if (newDensity > forestMap[ny][nx]) {
+                                                forestMap[ny][nx] = newDensity;
+                                                forestQueue.push({ x: nx, y: ny, density: newDensity });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    function preErode() {
+        const PRE_SIM_STEPS = 5000;
+        const PRE_SIM_EROSION_RATE = 0.0001;
+        const PRE_SIM_RAIN = 0.02;
+        let tempWaterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        let tempNextWaterMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+
+        for (let i = 0; i < PRE_SIM_STEPS; i++) {
+            for (const tile of islandTiles) tempWaterMap[tile.y][tile.x] += PRE_SIM_RAIN;
+            for(let y=0; y < MAP_HEIGHT; y++) tempNextWaterMap[y].fill(0);
+            for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) {
+                if (tempWaterMap[y][x] <= 0.001) continue;
+                let currentWater = tempWaterMap[y][x];
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold) continue;
+                let lowestNeighbor = { x: -1, y: -1, totalHeight: elevationMap[y][x] + currentWater };
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                        const neighborTotalHeight = elevationMap[ny][nx] + tempWaterMap[ny][nx];
+                        if (neighborTotalHeight < lowestNeighbor.totalHeight) lowestNeighbor = { x: nx, y: ny, totalHeight: neighborTotalHeight };
+                    }
+                }
+                if (lowestNeighbor.x !== -1) {
+                    const heightDifference = (elevationMap[y][x] + currentWater) - lowestNeighbor.totalHeight;
+                    const waterToMove = Math.max(0, Math.min(currentWater, heightDifference / 2.0));
+                    tempNextWaterMap[lowestNeighbor.y][lowestNeighbor.x] += waterToMove;
+                    currentWater -= waterToMove;
+                }
+                tempNextWaterMap[y][x] += currentWater;
+            }
+            let swap = tempWaterMap; tempWaterMap = tempNextWaterMap; tempNextWaterMap = swap;
+            for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) if (riverMap[y][x] === 1 && tempWaterMap[y][x] > 0.1) {
+                let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[y][x] };
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] < lowestNeighbor.elevation) lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
+                }
+                if(lowestNeighbor.x !== -1) {
+                    const slope = elevationMap[y][x] - lowestNeighbor.elevation;
+                    const biome = getBiome(elevationMap[y][x], x, y);
+                    const resistance = biome.resistance || 10;
+                    const erosionAmount = PRE_SIM_EROSION_RATE * tempWaterMap[y][x] * slope * (1 / resistance);
+                    if (elevationMap[y][x] > BIOMES.OCEAN.threshold + erosionAmount) elevationMap[y][x] -= erosionAmount;
+                }
+            }
+        }
+    }
+
+    function generateMap() {
+        regenButton.classList.add('loading');
+        setTimeout(() => {
+            terrainNoise = new SimplexNoise();
+            const frequency = 5.0 / MAP_WIDTH;
+            const octaves = 5;
+            const persistence = 0.55; 
+            islandTiles = [];
+
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    let noiseValue = 0; let amp = 1; let freq = frequency;
+                    for (let i = 0; i < octaves; i++) {
+                        noiseValue += terrainNoise.noise2D(x * freq, y * freq) * amp;
+                        amp *= persistence; freq *= 2;
+                    }
+                    noiseValue = (noiseValue + 1) / 2;
+                    
+                    const dx = x - MAP_WIDTH / 2; const dy = y - MAP_HEIGHT / 2;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const maxDist = Math.sqrt(Math.pow(MAP_WIDTH / 2, 2) + Math.pow(MAP_HEIGHT / 2, 2));
+                    const falloff = (1 - dist / maxDist);
+                    const islandMask = Math.pow(falloff, 0.7);
+
+                    elevationMap[y][x] = noiseValue * islandMask;
+                    
+                    if (elevationMap[y][x] > BIOMES.OCEAN.threshold) { islandTiles.push({x, y}); }
+                }
+            }
+            
+            generateRiversAndLakes();
+            preErode();
+            generateRiversAndLakes(); // Re-run to carve new paths after erosion
+            initializeSalinity();
+            initializeOceanCurrents();
+            preGrowForests();
+            
+            [snowMap, waterMap, iceMap, annualPrecipitationMap, cloudMap, temperatureMap, groundwaterMap].forEach(m => m.forEach(r => r.fill(0)));
+            vegetationHealthMap.forEach(r => r.fill(1.0));
+            initializeFauna();
+            initializeCivilization();
+            activeChunks.clear();
+            for(let y = 0; y < MAP_HEIGHT; y++) for(let x = 0; x < MAP_WIDTH; x++) {
+                if(riverMap[y][x] > 0) {
+                    const chunkX = Math.floor(x / CHUNK_SIZE);
+                    const chunkY = Math.floor(y / CHUNK_SIZE);
+                    activeChunks.add(`${chunkX},${chunkY}`);
+                }
+            }
+            
+            staticMapDirty = true;
+            regenButton.classList.remove('loading');
+        }, 10);
+    }
+
+    function getBiome(elevation, x, y) {
+        const humanTile = humanMap[y]?.[x];
+        if (humanTile) {
+            if (humanTile.type === HUMAN_TILE_TYPES.SETTLEMENT) return BIOMES.HAMLET;
+            if (humanTile.type === HUMAN_TILE_TYPES.FARMLAND) return BIOMES.FARMLAND;
+            if (humanTile.type === HUMAN_TILE_TYPES.PORT) return BIOMES.PORT;
+        }
+        for (const biomeKey in BIOMES) {
+            if (BIOMES[biomeKey].threshold !== undefined && elevation <= BIOMES[biomeKey].threshold) {
+                return BIOMES[biomeKey];
+            }
+        }
+        return BIOMES.PEAK;
+    }
+    
+    // --- RENDERING ---
+    function drawStaticMapToOffscreenBuffer() {
+        const dayOfYear = (day - 1) % YEAR_LENGTH;
+        const baseHillShadeStrength = 15;
+        
+        // Calculate seasonal sun angle for hillshading
+        const seasonalFactor = Math.cos((dayOfYear / YEAR_LENGTH) * 2 * Math.PI); // -1 in summer, +1 in winter
+        const dynamicHillShadeStrength = baseHillShadeStrength * (1 + seasonalFactor * 0.8);
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                
+                const biome = getBiome(elevationMap[y][x], x, y);
+                let color;
+                if (typeof biome.color === 'object' && !Array.isArray(biome.color)) {
+                    color = getSeasonalTerrainColor(biome, dayOfYear, x, y);
+                } else {
+                    color = `rgb(${biome.color.join(',')})`;
+                }
+                
+                offscreenCtx.fillStyle = color;
+                offscreenCtx.fillRect(x, y, 1, 1);
+                
+                if (forestMap[y][x] > 0.1 && biome !== BIOMES.FARMLAND && biome !== BIOMES.HAMLET) {
+                    offscreenCtx.fillStyle = `rgba(13, 55, 13, ${Math.min(forestMap[y][x] * 0.9, 0.85)})`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
+
+                 if (elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    // New dynamic hillshading from the South
+                    const southElevation = y < MAP_HEIGHT - 1 ? elevationMap[y + 1][x] : elevationMap[y][x];
+                    const shade = (elevationMap[y][x] - southElevation) * dynamicHillShadeStrength;
+                    
+                    // Apply shadow (if tile is lower than its southern neighbor)
+                    offscreenCtx.fillStyle = `rgba(0, 0, 0, ${Math.max(0, -shade * 0.2)})`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                    // Apply highlight (if tile is higher than its southern neighbor)
+                    offscreenCtx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, shade * 0.1)})`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
+                 
+                if (riverMap[y][x] === 2) {
+                    offscreenCtx.fillStyle = '#3498db';
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                } else if (riverMap[y][x] === 1) {
+                    offscreenCtx.fillStyle = `rgba(41, 128, 185, 0.7)`;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                }
+
+                if (pathUsageMap[y][x] > 0 && !humanMap[y][x]) {
+                       offscreenCtx.fillStyle = `rgba(${BIOMES.ROAD.color.join(',')}, ${Math.min(pathUsageMap[y][x] / 50, 0.8)})`;
+                       offscreenCtx.fillRect(x, y, 1, 1);
+                }
+            }
+        }
+    }
+
+    function drawMap() {
+        if(staticMapDirty) {
+            drawStaticMapToOffscreenBuffer();
+            staticMapDirty = false;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(offscreenCanvas, view.offsetX, view.offsetY, MAP_WIDTH * view.zoom, MAP_HEIGHT * view.zoom);
+        
+        const viewMode = viewModeSelect.value;
+        const startX = Math.max(0, Math.floor(-view.offsetX / view.zoom));
+        const startY = Math.max(0, Math.floor(-view.offsetY / view.zoom));
+        const endX = Math.min(MAP_WIDTH, Math.ceil((-view.offsetX + canvas.width) / view.zoom));
+        const endY = Math.min(MAP_HEIGHT, Math.ceil((-view.offsetY + canvas.height) / view.zoom));
+
+        for (let y = startY; y < endY; y++) {
+            for (let x = startX; x < endX; x++) {
+                const screenX = Math.round(x * view.zoom + view.offsetX);
+                const screenY = Math.round(y * view.zoom + view.offsetY);
+                const nextScreenX = Math.round((x + 1) * view.zoom + view.offsetX);
+                const nextScreenY = Math.round((y + 1) * view.zoom + view.offsetY);
+                const renderWidth = nextScreenX - screenX;
+                const renderHeight = nextScreenY - screenY;
+                if (renderWidth <= 0 || renderHeight <= 0) continue;
+
+                if (viewMode === 'civilization') {
+                    const humanTile = humanMap[y][x];
+                    if (humanTile) {
+                        const settlement = settlements.find(s => s.id === humanTile.id);
+                        if (settlement) {
+                            const popDensity = Math.min(settlement.population / 100, 1);
+                            ctx.fillStyle = `rgba(255, 255, 100, ${popDensity * 0.7})`;
+                            ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                        }
+                    }
+                } else if (viewMode === 'trade') {
+                     const humanTile = humanMap[y][x];
+                    if (humanTile) {
+                        const settlement = settlements.find(s => s.id === humanTile.id);
+                        if (settlement) {
+                            const wealth = settlement.happiness; // Directly use happiness
+                            const wealthPercent = Math.min(wealth / 2, 1);
+                            const poorColor = [239, 68, 68], richColor = [34, 197, 94];
+                            const color = lerpColor(poorColor, richColor, wealthPercent);
+                            ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.6)`;
+                            ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                        }
+                    }
+                    if(pathUsageMap[y][x] > 10) {
+                        ctx.fillStyle = `rgba(255,255,255,${Math.min(pathUsageMap[y][x] / 200, 0.5)})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                    }
+                } else if (viewMode === 'temp') {
+                    const temp = temperatureMap[y][x];
+                    const clampedTemp = Math.max(-10, Math.min(40, temp));
+                    const percent = (clampedTemp + 10) / 50; 
+                    let r, g, b;
+                    if (percent < 0.33) { const p = percent / 0.33; r = 0; g = 255 * p; b = 255 * (1 - p); } 
+                    else if (percent < 0.66) { const p = (percent - 0.33) / 0.33; r = 255 * p; g = 255; b = 0; } 
+                    else { const p = (percent - 0.66) / 0.34; r = 255; g = 255 * (1 - p); b = 0;}
+                    ctx.fillStyle = `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                } else if (viewMode === 'flow') {
+                    const waterAmount = waterMap[y][x] + (riverMap[y][x] > 0 ? 0.1 : 0);
+                    const saturation = Math.min(waterAmount * 2, 1);
+                    const r = 51, g = 51, b = 51;
+                    ctx.fillStyle = `rgba(${Math.floor(r+(52 - r) * saturation)}, ${Math.floor(g+(152-g)*saturation)}, ${Math.floor(b+(219-b)*saturation)}, 0.8)`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                } else if (viewMode === 'weather') {
+                    const grey = Math.floor(cloudMap[y][x] * 255);
+                    ctx.fillStyle = `rgba(${grey},${grey},${grey}, 0.8)`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                } else if (viewMode === 'groundwater') {
+                    const waterLevel = groundwaterMap[y][x];
+                    const saturation = Math.min(waterLevel / 2.0, 1.0);
+                    const r = 161, g = 106, b = 45;
+                    const r_sat = 52, g_sat = 152, b_sat = 219;
+                    ctx.fillStyle = `rgba(${Math.floor(r + (r_sat-r)*saturation)}, ${Math.floor(g + (g_sat-g)*saturation)}, ${Math.floor(b + (b_sat-b)*saturation)}, 0.7)`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                }
+                
+                if (viewMode === 'terrain' || viewMode === 'weather' || viewMode === 'trade') {
+                     if (riverMap[y][x] === 1) {
+                        const riverAlpha = Math.min(0.3 + waterMap[y][x] * 3.0, 1.0);
+                        if(riverAlpha > 0.31){
+                            const ceilZoom = Math.ceil(view.zoom);
+                            const riverWidthBonus = Math.min(waterMap[y][x] * 20, ceilZoom * 0.8);
+                            ctx.fillStyle = `rgba(82, 172, 229, ${riverAlpha})`;
+                            ctx.fillRect(screenX - riverWidthBonus / 2, screenY - riverWidthBonus/2, renderWidth + riverWidthBonus, renderHeight + riverWidthBonus);
+                        }
+                    }
+
+                    if (waterMap[y][x] > 0.1 && riverMap[y][x] === 0) {
+                        ctx.fillStyle = `rgba(82, 172, 229, ${Math.min(waterMap[y][x] / 2.0, 0.7)})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                    }
+                    if (snowMap[y][x] > 0.005) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.4 + snowMap[y][x] * 2.0, 1.0)})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                    }
+                }
+
+                if (iceMap[y][x] > 0.1) {
+                    ctx.fillStyle = `rgba(174, 214, 241, ${Math.min(iceMap[y][x] / 2.0, 0.8)})`;
+                    ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                }
+
+                if ((viewMode === 'terrain' || viewMode === 'weather' || viewMode === 'groundwater') && iceMap[y][x] < 0.1) {
+                    const cloudDensity = cloudMap[y][x];
+                    if (cloudDensity > 0.5) {
+                        const opacity = Math.pow((cloudDensity - 0.5) / 0.5, 2) * 0.7;
+                        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                        ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                        if (cloudDensity > 0.85) {
+                            ctx.fillStyle = temperatureMap[y][x] <= 0 ? 'rgba(220, 220, 255, 0.7)' : 'rgba(100, 150, 255, 0.6)';
+                            ctx.globalAlpha = 0.8;
+                            ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                            ctx.globalAlpha = 1.0;
+                        }
+                    }
+                }
+                if (viewMode === 'terrain') {
+                    let hasOnshoreCurrent = false;
+                    if(elevationMap[y][x] <= BIOMES.OCEAN.threshold) {
+                        for(let dy = -1; dy <= 1; dy++) {
+                           for(let dx = -1; dx <= 1; dx++) {
+                               if(dx === 0 && dy === 0) continue;
+                               const nx = x + dx, ny = y + dy;
+                               if(nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
+                                   const current = oceanCurrentMap[y][x];
+                                   const dotProduct = dx * current.x + dy * current.y;
+                                   if(dotProduct > 0.1) {
+                                       hasOnshoreCurrent = true;
+                                       break;
+                                   }
+                               }
+                           }
+                           if(hasOnshoreCurrent) break;
+                        }
+                    }
+                    if(hasOnshoreCurrent) {
+                        const foamPhase = (day * 0.2 + x * 0.5 + y * 0.3);
+                        const foamAlpha = (Math.sin(foamPhase) * 0.5 + 0.5) * 0.3;
+                        if (foamAlpha > 0.05) {
+                            ctx.fillStyle = `rgba(255, 255, 255, ${foamAlpha})`;
+                            ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (viewMode === 'currents') {
+            const currentType = oceanCurrentSelect.value;
+            ctx.fillStyle = currentType === 'warm' ? '#ff6b6b' : '#4db8ff';
+            for (const p of currentParticles) {
+                const screenX = p.x * view.zoom + view.offsetX;
+                const screenY = p.y * view.zoom + view.offsetY;
+                if (screenX > 0 && screenX < canvas.width && screenY > 0 && screenY < canvas.height) {
+                    ctx.globalAlpha = Math.sin(p.age / 20) * 0.5 + 0.2;
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, view.zoom * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        if (viewMode === 'road') {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 1.5;
+            potentialTradeRoutes.forEach(path => {
+                ctx.beginPath();
+                const startX = path[0].x * view.zoom + view.offsetX + view.zoom / 2;
+                const startY = path[0].y * view.zoom + view.offsetY + view.zoom / 2;
+                ctx.moveTo(startX, startY);
+                for (let i = 1; i < path.length; i++) {
+                    const screenX = path[i].x * view.zoom + view.offsetX + view.zoom / 2;
+                    const screenY = path[i].y * view.zoom + view.offsetY + view.zoom / 2;
+                    ctx.lineTo(screenX, screenY);
+                }
+                ctx.stroke();
+            });
+        }
+
+
+        if (viewMode === 'terrain') {
+            const animalSize = Math.max(1.5, view.zoom * 0.4);
+            ctx.globalAlpha = 0.9;
+            
+            for(const m of mackerel) {
+                ctx.fillStyle = '#3498db';
+                const screenX = m.x * view.zoom + view.offsetX;
+                const screenY = m.y * view.zoom + view.offsetY;
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize * 0.8, 0, Math.PI * 2); ctx.fill();
+            }
+            for(const p of seagulls) {
+                ctx.fillStyle = '#e0e0e0';
+                const screenX = p.x * view.zoom + view.offsetX;
+                const screenY = p.y * view.zoom + view.offsetY;
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize * 0.7, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Debug drawing for fishing boats
+        if (hoverDebugCheckbox.checked) {
+            fishingBoats.forEach(boat => {
+                if (boat.state === 'seeking' && boat.path && boat.path.length > 0) {
+                    const startX = boat.x * view.zoom + view.offsetX;
+                    const startY = boat.y * view.zoom + view.offsetY;
+                    const end = boat.path[boat.path.length-1];
+                    const endX = end.x * view.zoom + view.offsetX;
+                    const endY = end.y * view.zoom + view.offsetY;
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.strokeStyle = 'red';
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+            });
+        }
+
+
+        const allMovers = [ship, ...tradeShips, ...fishingBoats, ...traders].filter(s => s);
+        allMovers.forEach(s => {
+            const screenX = s.x * view.zoom + view.offsetX;
+            const screenY = s.y * view.zoom + view.offsetY;
+            if (s.type === 'trader') {
+                 ctx.fillStyle = '#8B4513';
+                 ctx.fillRect(screenX, screenY, Math.max(1, view.zoom * 0.8), Math.max(1, view.zoom * 0.8));
+            } else {
+                const shipWidth = s.type === 'fishing' ? Math.max(1.5, view.zoom * 1.0) : Math.max(2, view.zoom * 1.5);
+                const shipHeight = s.type === 'fishing' ? Math.max(0.8, view.zoom * 0.5) : Math.max(1, view.zoom * 0.8);
+                ctx.fillStyle = '#8B4513'; // Hull
+                ctx.fillRect(screenX - shipWidth / 2, screenY - shipHeight / 2, shipWidth, shipHeight);
+                ctx.fillStyle = '#FFFFFF'; // Sail
+                ctx.fillRect(screenX - shipWidth * 0.1, screenY - shipHeight * 1.5, shipWidth * 0.2, shipHeight * 1.2);
+            }
+        });
+    }
+
+    // --- SIMULATION LOGIC ---
+    function updateWeather() {
+        const dayOfYear = (day - 1) % YEAR_LENGTH;
+        const yearlyBaseTemp = TEMP_AVG - Math.cos((dayOfYear / YEAR_LENGTH) * 2 * Math.PI) * TEMP_AMPLITUDE;
+        
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const elevation = elevationMap[y][x];
+                let temp = yearlyBaseTemp;
+
+                if (elevation <= BIOMES.OCEAN.threshold) {
+                    temp += oceanCurrentMap[y][x].temp;
+                } else { 
+                    const landElevation = (elevation - BIOMES.OCEAN.threshold) / (1 - BIOMES.OCEAN.threshold);
+                    temp -= landElevation * 25;
+                    let oceanInfluence = 0;
+                    let neighborCount = 0;
+                    for (let dy = -2; dy <= 2; dy++) {
+                        for (let dx = -2; dx <= 2; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) {
+                                const dist = Math.sqrt(dx*dx + dy*dy);
+                                oceanInfluence += temperatureMap[ny][nx] / dist;
+                                neighborCount += 1 / dist;
+                            }
+                        }
+                    }
+                    if (neighborCount > 0) {
+                        const avgOceanTemp = oceanInfluence / neighborCount;
+                        temp = (temp + avgOceanTemp) / 2;
+                    }
+                }
+
+                const weatherFluctuation = weatherNoise.noise3D(x / 20, y / 20, day / 10) * 4;
+                temp += weatherFluctuation;
+                temperatureMap[y][x] = temp;
+            }
+        }
+        if (islandTiles.length > 0) {
+            const totalIslandTemp = islandTiles.reduce((sum, tile) => sum + temperatureMap[tile.y][tile.x], 0);
+            avgTempEl.textContent = `${(totalIslandTemp / islandTiles.length).toFixed(1)}°C`;
+        } else {
+            avgTempEl.textContent = `N/A`;
+        }
+    }
+
+    function updateCloudsAndWeather() {
+        cloudOffsetX += 0.015 / TICKS_PER_DAY;
+
+        const cloudFreq = 5.0 / MAP_WIDTH;
+        const windEffectFactor = 8.0, rainShadowFactor = 12.0, peakClearFactor = 1.5;
+        let moistureMap = Array(MAP_HEIGHT).fill(1.0);
+        let avgIslandTemp = 0;
+        if (islandTiles.length > 0) {
+            avgIslandTemp = islandTiles.reduce((sum, tile) => sum + temperatureMap[tile.y][tile.x], 0) / islandTiles.length;
+        }
+        let tempCloudReduction = avgIslandTemp > 18 ? Math.min((avgIslandTemp - 18) / 15, 1) * 0.8 : 0;
+        for (let x = 0; x < MAP_WIDTH; x++) {
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                const currentElevation = elevationMap[y][x];
+                let topoEffect = 0;
+                let moistureBonus = 0;
+
+                const upwindX = x - 1;
+                if (upwindX >= 0 && elevationMap[y][upwindX] <= BIOMES.OCEAN.threshold) {
+                    const oceanTemp = temperatureMap[y][upwindX];
+                    const baseOceanTemp = TEMP_AVG - Math.cos(((day - 1) % YEAR_LENGTH / YEAR_LENGTH) * 2 * Math.PI) * TEMP_AMPLITUDE;
+                    if (oceanTemp > baseOceanTemp) {
+                         moistureBonus = (oceanTemp - baseOceanTemp) * 0.05;
+                    }
+                }
+
+
+                 if (currentElevation > BIOMES.OCEAN.threshold) {
+                    const upwindElevation = (x > 0) ? elevationMap[y][x - 1] : currentElevation;
+                    const slope = (currentElevation - upwindElevation) * 15;
+                    if (slope > 0) topoEffect = slope * windEffectFactor;
+                    else topoEffect = slope * rainShadowFactor;
+                    if (currentElevation > BIOMES.MOUNTAIN.threshold) {
+                        const peakEffect = (currentElevation - BIOMES.MOUNTAIN.threshold) / (1.0 - BIOMES.MOUNTAIN.threshold);
+                        topoEffect -= peakEffect * peakClearFactor;
+                    }
+                }
+                let baseDensity = ((weatherNoise.noise2D((x * cloudFreq) + cloudOffsetX, y * cloudFreq) + 1) / 2) * (moistureMap[y] + moistureBonus) * (1 - tempCloudReduction);
+                cloudMap[y][x] = Math.max(0, Math.min(1, baseDensity + (topoEffect / 100)));
+                
+                if (cloudMap[y][x] > 0.85) moistureMap[y] *= 0.4;
+                else moistureMap[y] = Math.min(1.0, moistureMap[y] + 0.02);
+            }
+        }
+        const avgCloudiness = islandTiles.length > 0 ? islandTiles.reduce((sum, t) => sum + cloudMap[t.y][t.x], 0) / islandTiles.length : 0;
+        if(avgCloudiness > 0.65) weatherEl.textContent = 'Stormy';
+        else if (avgCloudiness > 0.45) weatherEl.textContent = 'Cloudy';
+        else if (avgCloudiness > 0.30) weatherEl.textContent = 'Partly Cloudy';
+        else weatherEl.textContent = 'Clear';
+    }
+    
+    function updateSurfaceWater() {
+        const meltRate = 0.2, accumulationRate = 0.1, rainAmount = 0.05, maxSnowDepth = 5.0;
+        const seepageRate = 0.2;
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const temp = temperatureMap[y][x];
+                if (temp > 0 && snowMap[y][x] > 0) {
+                    const meltAmount = temp * meltRate * 0.1;
+                    const actualMelt = Math.min(snowMap[y][x], meltAmount);
+                    snowMap[y][x] -= actualMelt;
+                    if(elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                        waterMap[y][x] += actualMelt;
+                        annualPrecipitationMap[y][x] += actualMelt;
+                        activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                    }
+                }
+                if (cloudMap[y][x] > 0.85 && elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    if (temp <= 0) {
+                        snowMap[y][x] = Math.min(maxSnowDepth, snowMap[y][x] + accumulationRate);
+                        annualPrecipitationMap[y][x] += accumulationRate;
+                    } else {
+                        waterMap[y][x] += rainAmount;
+                        annualPrecipitationMap[y][x] += rainAmount;
+                        activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                    }
+                }
+
+                if (waterMap[y][x] > 0.01 && riverMap[y][x] === 0) {
+                    const toSeep = waterMap[y][x] * seepageRate;
+                    waterMap[y][x] -= toSeep;
+                    groundwaterMap[y][x] += toSeep;
+                }
+            }
+        }
+    }
+
+    function updateEcology() {
+        const growthRate = 0.05, spreadChance = 0.1, declineRate = 0.02;
+        let forestDirty = false;
+        for (const tile of islandTiles) {
+            const { x, y } = tile;
+            if(humanMap[y][x]) continue; 
+            const elevation = elevationMap[y][x], precipitation = annualPrecipitationMap[y][x];
+            const landElevation = (elevation - BIOMES.OCEAN.threshold) / (1 - BIOMES.OCEAN.threshold);
+            const avgAnnualTemp = TEMP_AVG - landElevation * 25;
+            const isHabitable = elevation > BIOMES.BEACH.threshold && elevation < BIOMES.PEAK.threshold && avgAnnualTemp > 1 && precipitation > 5;
+
+            if (isHabitable) {
+                if(forestMap[y][x] < 1.0) { forestMap[y][x] = Math.min(1.0, forestMap[y][x] + growthRate * (precipitation / 20)); forestDirty = true; }
+                if (forestMap[y][x] > 0.5) {
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if ((dx !== 0 || dy !== 0) && Math.random() < spreadChance) {
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                if(elevationMap[ny][nx] > BIOMES.BEACH.threshold && elevationMap[ny][nx] < BIOMES.PEAK.threshold && !humanMap[ny][nx]) {
+                                    if(forestMap[ny][nx] < 1.0) { forestMap[ny][nx] = Math.min(1.0, forestMap[ny][nx] + growthRate * 0.1); forestDirty = true; }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (forestMap[y][x] > 0) { forestMap[y][x] = Math.max(0.0, forestMap[y][x] - declineRate); forestDirty = true; }
+        }
+        
+        annualPrecipitationMap.forEach(r => r.fill(0));
+        if(forestDirty) staticMapDirty = true;
+    }
+
+    function updateIce() {
+        const freezeRate = 0.02 / TICKS_PER_DAY, meltRate = 0.04 / TICKS_PER_DAY, maxIce = 4.0;
+        const averageWorldTemp = temperatureMap.flat().reduce((a, b) => a + b, 0) / (MAP_WIDTH * MAP_HEIGHT);
+        
+        for(let y=0; y<MAP_HEIGHT; y++) {
+            for(let x=0; x<MAP_WIDTH; x++) {
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] > 0) {
+                    const temp = temperatureMap[y][x];
+                    const salinity = salinityMap[y][x];
+                    let freezePoint = 0.0 - (salinity * 2.0);
+                    let canFreeze = false;
+
+                    if (humanMap[y]?.[x]?.type === HUMAN_TILE_TYPES.PORT) {
+                        freezePoint -= 5; // Harbor activity prevents freezing
+                    }
+
+                    if(temp < freezePoint) {
+                        if (salinity < 0.8) { // Freshwater or brackish water freezes normally
+                            canFreeze = true;
+                        } else if (averageWorldTemp < -20) { // Saltwater only freezes in extreme global cold (-20 C), as requested.
+                            canFreeze = true;
+                        }
+                    }
+
+                    if(canFreeze) {
+                        iceMap[y][x] = Math.min(maxIce, iceMap[y][x] + (freezePoint - temp) * freezeRate);
+                    } else if (temp > freezePoint && iceMap[y][x] > 0) {
+                        iceMap[y][x] = Math.max(0, iceMap[y][x] - (temp - freezePoint) * meltRate);
+                    }
+                }
+            }
+        }
+    }
+
+    function updateErosion() {
+        const erosionRate = 0.000005; 
+        let mapDirty = false;
+        for (const chunkKey of activeChunks) {
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            const startX = chunkX * CHUNK_SIZE, startY = chunkY * CHUNK_SIZE;
+            const endX = Math.min(startX + CHUNK_SIZE, MAP_WIDTH);
+            const endY = Math.min(startY + CHUNK_SIZE, MAP_HEIGHT);
+
+            for(let y = startY; y < endY; y++) {
+                for(let x = startX; x < endX; x++) {
+                     if (riverMap[y][x] === 1 && waterMap[y][x] > 0.1) {
+                        let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[y][x] };
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            if(dx === 0 && dy === 0) continue;
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                if (elevationMap[ny][nx] < lowestNeighbor.elevation) {
+                                    lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
+                                }
+                            }
+                        }
+                        if(lowestNeighbor.x !== -1) {
+                            const slope = elevationMap[y][x] - lowestNeighbor.elevation;
+                            const biome = getBiome(elevationMap[y][x], x, y);
+                            const resistance = biome.resistance || 10;
+                            const erosionAmount = erosionRate * waterMap[y][x] * slope * (1 / resistance);
+                            if (elevationMap[y][x] > BIOMES.OCEAN.threshold + erosionAmount) {
+                                elevationMap[y][x] -= erosionAmount;
+                                mapDirty = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if(mapDirty) staticMapDirty = true;
+    }
+    
+    function updateVegetationHealth() {
+        let dirty = false;
+        for(let y=0; y<MAP_HEIGHT; y++) {
+            for(let x=0; x<MAP_HEIGHT; x++) {
+                const biome = getBiome(elevationMap[y][x], x, y);
+                if(biome === BIOMES.LOWLANDS || biome === BIOMES.HILLS) {
+                    const temp = temperatureMap[y][x];
+                    const water = waterMap[y][x] + groundwaterMap[y][x];
+                    let health = vegetationHealthMap[y][x];
+                    
+                    if(water > 0.01) health = Math.min(1.0, health + 0.1 / TICKS_PER_DAY);
+                    if(temp > 30) health = Math.max(0.0, health - 0.05 / TICKS_PER_DAY);
+                    else if(health < 1.0 && temp < 25) health = Math.min(1.0, health + 0.01 / TICKS_PER_DAY);
+                    
+                    if(vegetationHealthMap[y][x] !== health) {
+                        vegetationHealthMap[y][x] = health;
+                        dirty = true;
+                    }
+                }
+            }
+        }
+        if (dirty) staticMapDirty = true;
+    }
+
+    function updateWaterFlow() {
+        const flowSpeed = 0.5, riverSeepage = 0.005 / TICKS_PER_DAY;
+        const groundwaterFeedRate = 0.01 / TICKS_PER_DAY;
+        const groundwaterDiffusionRate = 0.1 / TICKS_PER_DAY;
+
+        let nextGroundwaterMap = groundwaterMap.map(arr => arr.slice());
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                 if (elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    let neighborSum = 0, neighborCount = 0;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
+                            neighborSum += groundwaterMap[ny][nx];
+                            neighborCount++;
+                        }
+                    }
+                    if (neighborCount > 0) {
+                        const avgNeighbor = neighborSum / neighborCount;
+                        nextGroundwaterMap[y][x] += (avgNeighbor - groundwaterMap[y][x]) * groundwaterDiffusionRate;
+                    }
+                }
+            }
+        }
+        groundwaterMap = nextGroundwaterMap;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (riverMap[y][x] > 0 && groundwaterMap[y][x] > 0) {
+                    const feedAmount = Math.min(groundwaterMap[y][x], groundwaterFeedRate);
+                    groundwaterMap[y][x] -= feedAmount;
+                    waterMap[y][x] += feedAmount;
+                    activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                }
+            }
+        }
+
+        let waterFromNeighbors = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        let nextActiveChunks = new Set();
+        for (const chunkKey of activeChunks) {
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            const startX = chunkX * CHUNK_SIZE, startY = chunkY * CHUNK_SIZE;
+            const endX = Math.min(startX + CHUNK_SIZE, MAP_WIDTH);
+            const endY = Math.min(startY + CHUNK_SIZE, MAP_HEIGHT);
+            for(let y = startY; y < endY; y++) {
+                for(let x = startX; x < endX; x++) {
+                    let currentWater = waterMap[y][x];
+                    if (currentWater <= 0.001 && riverMap[y][x] === 0) continue;
+                    if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] === 2) {
+                        waterFromNeighbors[y][x] += currentWater; continue;
+                    };
+                    let lowestNeighbor = { x: -1, y: -1, totalHeight: elevationMap[y][x] + currentWater };
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                            const neighborTotalHeight = elevationMap[ny][nx] + waterMap[ny][nx];
+                            if (neighborTotalHeight < lowestNeighbor.totalHeight) {
+                                lowestNeighbor = { x: nx, y: ny, totalHeight: neighborTotalHeight };
+                            }
+                        }
+                    }
+                    if (lowestNeighbor.x !== -1) {
+                        const heightDifference = (elevationMap[y][x] + currentWater) - lowestNeighbor.totalHeight;
+                        const waterToMove = Math.max(0, Math.min(currentWater, heightDifference / 2.0) * flowSpeed);
+                        if (waterToMove > 0) {
+                            waterFromNeighbors[lowestNeighbor.y][lowestNeighbor.x] += waterToMove;
+                            currentWater -= waterToMove;
+                        }
+                    }
+                    waterFromNeighbors[y][x] += currentWater;
+                }
+            }
+        }
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                let currentWater = waterFromNeighbors[y][x];
+                if (currentWater <= 0.001) { waterMap[y][x] = 0; continue; }
+                const isRiver = riverMap[y][x] === 1;
+                if(isRiver) currentWater += riverSeepage;
+                
+                const temp = temperatureMap[y][x];
+                let baseEvaporation = 0.02 / TICKS_PER_DAY;
+                if(temp > 25) baseEvaporation *= (1 + (temp-25) / 10);
+                
+                const evaporationRate = baseEvaporation;
+                currentWater *= (1 - evaporationRate);
+
+                if (riverMap[y][x] === 2 && iceMap[y][x] > 0.2) {
+                     currentWater *= (1 - (baseEvaporation * (iceMap[y][x] / 4.0)));
+                }
+                waterMap[y][x] = Math.max(0, currentWater);
+                if (waterMap[y][x] > 0.001) {
+                    nextActiveChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                }
+            }
+        }
+        activeChunks = nextActiveChunks;
+    }
+    
+    function updateCurrentParticles() {
+        if (viewModeSelect.value !== 'currents') return;
+        for (let p of currentParticles) {
+            const mapX = Math.floor(p.x);
+            const mapY = Math.floor(p.y);
+            if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT) {
+                const current = oceanCurrentMap[mapY][mapX];
+                p.x += current.x;
+                p.y += current.y;
+            }
+            p.age++;
+            if (p.age > 100 || p.x < 0 || p.x >= MAP_WIDTH || p.y < 0 || p.y >= MAP_HEIGHT) {
+                p.x = Math.random() * MAP_WIDTH;
+                p.y = Math.random() * MAP_HEIGHT;
+                p.age = 0;
+            }
+        }
+    }
+
+    function updateFauna() {
+        // --- Mackerel Logic ---
+        for (let i = mackerel.length - 1; i >= 0; i--) {
+            const m = mackerel[i];
+            
+            let schoolmates = mackerel.filter(other => m.id !== other.id && Math.hypot(m.x - other.x, m.y - other.y) < 7);
+            let schoolCenterX = 0; let schoolCenterY = 0;
+            if (schoolmates.length > 2) {
+                schoolmates.forEach(sm => { schoolCenterX += sm.x; schoolCenterY += sm.y; });
+                schoolCenterX /= schoolmates.length;
+                schoolCenterY /= schoolmates.length;
+            }
+            
+            let bestTile = {x: m.x, y: m.y, score: -Infinity};
+            for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++) {
+                const nx = m.x + dx, ny = m.y + dy;
+                const rnx = Math.round(nx), rny = Math.round(ny);
+                if (rnx < 0 || rnx >= MAP_WIDTH || rny < 0 || rny >= MAP_HEIGHT || elevationMap[rny][rnx] > BIOMES.OCEAN.threshold) continue;
+
+                let score = 0;
+                
+                if(schoolmates.length > 2) {
+                    const toCenterX = schoolCenterX - nx; const toCenterY = schoolCenterY - ny;
+                    score += (7 - Math.hypot(toCenterX, toCenterY)) * 10;
+                    const tangentX = -toCenterY, tangentY = toCenterX;
+                    const moveX = nx - m.x, moveY = ny - m.y;
+                    if (tangentX !== 0 || tangentY !== 0) score += (moveX * tangentX + moveY * tangentY) / Math.sqrt(tangentX*tangentX + tangentY*tangentY) * 30;
+                }
+                mackerel.forEach(other => { if (m.id !== other.id && Math.hypot(nx - other.x, ny - other.y) < 1.5) score -= 1000; });
+                
+                const current = oceanCurrentMap[rny][rnx];
+                score += (dx * current.x + dy * current.y) * 10;
+                if (score > bestTile.score) bestTile = {x: nx, y: ny, score};
+            }
+            m.x = bestTile.x; m.y = bestTile.y;
+        }
+
+        // --- Seagull Logic ---
+        for(let i = seagulls.length - 1; i >= 0; i--) {
+            const p = seagulls[i];
+            if (!p.target || Math.random() < 0.01) {
+                 const settlementPOIs = settlements.flatMap(s => s.tiles);
+                 const pointsOfInterest = [...mackerel, ...settlementPOIs, ...settlementPOIs, ...settlementPOIs, ...settlementPOIs, ship, ...tradeShips, ...fishingBoats, ...traders].filter(Boolean);
+
+                if (pointsOfInterest.length > 0) {
+                    p.target = pointsOfInterest[Math.floor(Math.random() * pointsOfInterest.length)];
+                } else {
+                    p.target = {x: p.nestX, y: p.nestY};
+                }
+            }
+            
+            if (p.target) {
+                const distToTarget = Math.hypot(p.x - p.target.x, p.y - p.target.y);
+                if(distToTarget < 5) { // Circling behavior
+                    const toTargetX = p.target.x - p.x;
+                    const toTargetY = p.target.y - p.y;
+                    const tangentX = -toTargetY;
+                    const tangentY = toTargetX;
+                    p.x += tangentX * 0.1;
+                    p.y += tangentY * 0.1;
+                } else { // Move towards target
+                    p.x += Math.sign(p.target.x - p.x) * 0.5;
+                    p.y += Math.sign(p.target.y - p.y) * 0.5;
+                }
+            }
+            
+            p.x = Math.max(0, Math.min(MAP_WIDTH - 1, p.x));
+            p.y = Math.max(0, Math.min(MAP_HEIGHT - 1, p.y));
+        }
+    }
+    
+    function updateCivilization() {
+        let totalPopulation = 0;
+        let mapNeedsRedraw = false;
+        
+        settlements.forEach(s => {
+            const dailyRate = 1 / TICKS_PER_DAY;
+            const settlementTiles = s.tiles.filter(t => t.type === HUMAN_TILE_TYPES.SETTLEMENT);
+            const farmTiles = s.tiles.filter(t => t.type === HUMAN_TILE_TYPES.FARMLAND);
+
+            s.food -= s.population * 0.1 * dailyRate;
+            s.goods += s.population * 0.01 * dailyRate;
+            
+            const nearbyForests = settlementTiles.reduce((acc, tile) => {
+                for(let dy = -2; dy <= 2; dy++) for(let dx = -2; dx <= 2; dx++) {
+                    const nx = tile.x + dx, ny = tile.y + dy;
+                    if(nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) acc += forestMap[ny][nx];
+                }
+                return acc;
+            }, 0);
+            s.wood += nearbyForests * 0.005 * dailyRate;
+            
+            let farmFood = farmTiles.length * 0.3 * (getSeasonName() === 'Summer' ? 1.5 : (getSeasonName() === 'Winter' ? 0.1 : 1.0));
+            farmFood *= vegetationHealthMap[settlementTiles[0].y][settlementTiles[0].x];
+            s.food += farmFood * dailyRate;
+
+            s.happiness = Math.max(0, (s.food / s.population) + (s.goods / (s.population * 5)) - 1);
+            if (s.happiness > 1) {
+                s.population += s.happiness * 0.02 * dailyRate;
+            } else {
+                s.population -= (1 - s.happiness) * 0.03 * dailyRate;
+                if (s.happiness < 0.5 && s.population > 5) {
+                    const leaving = s.population * 0.01 * dailyRate;
+                    s.population -= leaving;
+                    s.migrants += leaving;
+                }
+            }
+
+            if (s.population <= 0) {
+                s.tiles.forEach(t => humanMap[t.y][t.x] = null);
+                mapNeedsRedraw = true;
+                return;
+            }
+
+            if (s.population > settlementTiles.length * 20 && s.wood > settlementTiles.length * 10) {
+                const bestTile = findBestTileForExpansion(s.tiles, HUMAN_TILE_TYPES.SETTLEMENT);
+                if(bestTile) {
+                    s.wood -= settlementTiles.length * 10;
+                    s.tiles.push({x: bestTile.x, y: bestTile.y, type: HUMAN_TILE_TYPES.SETTLEMENT});
+                    humanMap[bestTile.y][bestTile.x] = {type: HUMAN_TILE_TYPES.SETTLEMENT, id: s.id};
+                    mapNeedsRedraw = true;
+                }
+            }
+
+            if (s.food < s.population * 5 && s.population > 12) {
+                const bestTile = findBestTileForExpansion(s.tiles, HUMAN_TILE_TYPES.FARMLAND);
+                 if(bestTile) {
+                    s.tiles.push({x: bestTile.x, y: bestTile.y, type: HUMAN_TILE_TYPES.FARMLAND});
+                    humanMap[bestTile.y][bestTile.x] = {type: HUMAN_TILE_TYPES.FARMLAND, id: s.id};
+                    mapNeedsRedraw = true;
+                }
+            }
+
+            if (!s.port && s.population >= 10) {
+                establishPort(s);
+                if (s.port) mapNeedsRedraw = true;
+            }
+
+            if (s.port) {
+                const existingBoats = fishingBoats.filter(b => b.homeId === s.id).length;
+                const desiredBoats = Math.floor(s.population / 10);
+                if (existingBoats < desiredBoats) {
+                    console.log(`Settlement ${s.name} is spawning a fishing boat.`);
+                    fishingBoats.push({
+                        id: crypto.randomUUID(), homeId: s.id, x: s.port.x, y: s.port.y,
+                        type: 'fishing', state: 'seeking', progress: 0, path: null, cargo: 0,
+                    });
+                }
+            }
+
+             totalPopulation += s.population;
+        });
+
+        settlements = settlements.filter(s => s.population > 0);
+
+        if (settlements.length > 1) {
+            settlements.forEach(s1 => {
+                if (s1.migrants >= 1) {
+                    const happyCities = settlements.filter(s2 => s2.id !== s1.id && s2.port && s2.happiness > 1.2);
+                    if (happyCities.length > 0) {
+                        const destination = happyCities[Math.floor(Math.random() * happyCities.length)];
+                        const passengers = Math.floor(s1.migrants);
+                        s1.migrants -= passengers;
+                        createTradeShip(s1, destination, 'passengers', passengers);
+                    }
+                }
+
+                const hasGoods = s1.goods > s1.population * 2;
+                const hasFood = s1.food > s1.population * 4; 
+
+                settlements.forEach(s2 => {
+                    if (s1.id === s2.id) return;
+                    if (s1.port && s2.port && hasGoods && s2.goods < s2.population) {
+                        createTradeShip(s1, s2, 'goods', 50);
+                    }
+                    if (s1.port && s2.port && hasFood && s2.food < s2.population * 2.5) {
+                        createTradeShip(s1, s2, 'food', 50);
+                    }
+                });
+            });
+        }
+        
+        if (mapNeedsRedraw) staticMapDirty = true;
+        populationTotalEl.textContent = Math.floor(totalPopulation);
+    }
+    
+    function createTrader(s1, s2) {
+        if (traders.some(t => (t.homeId === s1.id && t.destinationId === s2.id) || (t.homeId === s2.id && t.destinationId === s1.id))) return;
+
+        const path = findPath(s1.tiles[0], s2.tiles[0], false);
+        if (path) {
+            path.forEach(p => pathUsageMap[p.y][p.x]++);
+            staticMapDirty = true; // Make path appear instantly
+            traders.push({
+                id: crypto.randomUUID(), type: 'trader', x: s1.tiles[0].x, y: s1.tiles[0].y,
+                path: path, progress: 0, homeId: s1.id, destinationId: s2.id,
+            });
+        }
+    }
+
+
+    function findBestTileForExpansion(settlementTiles, expansionType) {
+        let bestTile = null;
+        let maxScore = -Infinity;
+        const targetBiome = expansionType === HUMAN_TILE_TYPES.FARMLAND ? BIOMES.LOWLANDS : BIOMES.LOWLANDS; // Could be different for other types
+
+        settlementTiles.forEach(tile => {
+            for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++) {
+                if(dx === 0 && dy === 0) continue;
+                const nx = tile.x + dx;
+                const ny = tile.y + dy;
+
+                if(nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && !humanMap[ny][nx] && getBiome(elevationMap[ny][nx], nx, ny) === targetBiome) {
+                    let score = 0;
+                    if (expansionType === HUMAN_TILE_TYPES.FARMLAND) {
+                        score = vegetationHealthMap[ny][nx]; // Prioritize fertile land
+                    } else {
+                        score = 1; // Default score
+                    }
+
+                    if (score > maxScore) {
+                        maxScore = score;
+                        bestTile = {x: nx, y: ny};
+                    }
+                }
+            }
+        });
+        return bestTile;
+    }
+    
+    function createTradeShip(s1, s2, type, amount) {
+        if (!s1.port || !s2.port || tradeShips.some(ts => ts.homeId === s1.id && ts.destinationId === s2.id)) {
+            return;
+        }
+        
+        const path = findPath(s1.port, s2.port, true);
+        if (path) {
+            if (type === 'food') s1.food -= amount;
+            if (type === 'goods') s1.goods -= amount;
+            
+            tradeShips.push({
+                id: crypto.randomUUID(), type: 'trade', x: s1.port.x, y: s1.port.y,
+                path: path, progress: 0, homeId: s1.id, destinationId: s2.id,
+                cargoType: type, cargoAmount: amount
+            });
+        }
+    }
+
+    function establishPort(settlement) {
+        if(settlement.port) return;
+         for(const tile of settlement.tiles) {
+            if (tile.type === HUMAN_TILE_TYPES.SETTLEMENT) {
+                for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = tile.x + dx, ny = tile.y + dy;
+                    if(nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) {
+                        settlement.port = {x: nx, y: ny};
+                        humanMap[ny][nx] = { type: HUMAN_TILE_TYPES.PORT, id: settlement.id };
+                        return;
+                    }
+                }
+            }
+         }
+    }
+    
+    function findPath(start, end, isShip = false) {
+        const openSet = new Map([[`${start.x},${start.y}`, { ...start, g: 0, h: Math.hypot(end.x - start.x, end.y - start.y), f: Math.hypot(end.x - start.x, end.y - start.y) }]]);
+        const cameFrom = new Map();
+        const gScore = new Map([[`${start.x},${start.y}`, 0]]);
+        const closedSet = new Set();
+        
+        let counter = 0;
+        while (openSet.size > 0 && counter < 2000) {
+            counter++;
+            let lowestF = Infinity;
+            let currentKey;
+            let current;
+            for(const [key, node] of openSet) {
+                if (node.f < lowestF) {
+                    lowestF = node.f;
+                    currentKey = key;
+                    current = node;
+                }
+            }
+            
+            openSet.delete(currentKey);
+            closedSet.add(currentKey);
+    
+            if (Math.hypot(current.x - end.x, current.y - end.y) < 1.5) {
+                const path = []; let temp = current;
+                while (temp) { path.unshift(temp); temp = cameFrom.get(`${temp.x},${temp.y}`); }
+                return path;
+            }
+    
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const nx = Math.round(current.x + dx), ny = Math.round(current.y + dy);
+                const neighborKey = `${nx},${ny}`;
+                
+                if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT || closedSet.has(neighborKey)) continue;
+                
+                const isOcean = elevationMap[ny][nx] <= BIOMES.OCEAN.threshold;
+                if (isShip && !isOcean) continue;
+                if (!isShip && isOcean) continue;
+    
+                const elevCurrent = elevationMap[Math.round(current.y)][Math.round(current.x)];
+                const elevNeighbor = elevationMap[ny][nx];
+                const slope = Math.abs(elevCurrent - elevNeighbor);
+    
+                let moveCost = Math.sqrt(dx * dx + dy * dy);
+                if (!isShip) {
+                    const biome = getBiome(elevNeighbor, nx, ny);
+                    moveCost += biome.resistance + slope * 50;
+                    if (riverMap[ny][nx] > 0) moveCost += 15;
+                    if (pathUsageMap[ny][nx] > 50) moveCost *= 0.1;
+                } else {
+                    for (let dy_s = -1; dy_s <= 1; dy_s++) {
+                        for (let dx_s = -1; dx_s <= 1; dx_s++) {
+                            const nnx = nx + dx_s;
+                            const nny = ny + dy_s;
+                            if (nnx >= 0 && nnx < MAP_WIDTH && nny >= 0 && nny < MAP_HEIGHT && elevationMap[nny][nnx] > BIOMES.OCEAN.threshold) {
+                                moveCost += 20; // Coastal water penalty
+                                break;
+                            }
+                        }
+                    }
+                }
+    
+                const tentativeGScore = gScore.get(currentKey) + moveCost;
+    
+                if (tentativeGScore < (gScore.get(neighborKey) || Infinity)) {
+                    cameFrom.set(neighborKey, current);
+                    gScore.set(neighborKey, tentativeGScore);
+                    const h = Math.hypot(end.x - nx, end.y - ny);
+                    const f = tentativeGScore + h;
+                    openSet.set(neighborKey, { x: nx, y: ny, g: tentativeGScore, h, f });
+                }
+            }
+        }
+        console.log(`Pathfinding from ${start.x},${start.y} to ${end.x},${end.y} ${isShip ? '(ship)' : ''} failed.`);
+        return null; // No path
+    }
+    
+    function updateAgents() {
+        const allAgents = [ship, ...tradeShips, ...fishingBoats, ...traders].filter(s => s);
+
+        allAgents.forEach((agent) => {
+            if (agent.type === 'fishing') {
+                if (agent.state === 'seeking' && !agent.path) {
+                    const fishingGround = mackerel.length > 0 ? mackerel[Math.floor(Math.random() * mackerel.length)] : null;
+                    if (fishingGround) {
+                        console.log(`Fishing boat ${agent.id} targeting mackerel at ${fishingGround.x},${fishingGround.y}`);
+                        agent.path = findPath(agent, fishingGround, true);
+                        if(!agent.path) console.log(`Pathfinding failed for boat ${agent.id}`);
+                    }
+                } else if (agent.state === 'fishing') {
+                    agent.cargo += 0.5 / TICKS_PER_DAY;
+                    if (agent.cargo >= 10) {
+                        agent.state = 'returning';
+                        const settlement = settlements.find(set => set.id === agent.homeId);
+                        if (settlement?.port) {
+                            agent.path = findPath(agent, settlement.port, true);
+                            agent.progress = 0;
+                        } else { 
+                            fishingBoats = fishingBoats.filter(b => b.id !== agent.id);
+                        }
+                    }
+                }
+            }
+
+            if (!agent.path || agent.progress >= agent.path.length) {
+                if(agent.type === 'fishing') {
+                    if (agent.state === 'seeking') agent.state = 'fishing';
+                    else if (agent.state === 'returning') {
+                        const settlement = settlements.find(set => set.id === agent.homeId);
+                        if(settlement) settlement.food += agent.cargo;
+                        fishingBoats = fishingBoats.filter(b => b.id !== agent.id);
+                    }
+                } else if (agent.type === 'settler') { 
+                    ship = null;
+                } else if (agent.type === 'trade') {
+                    const dest = settlements.find(set => set.id === agent.destinationId);
+                    if(dest) {
+                        if(agent.cargoType === 'food') dest.food += agent.cargoAmount;
+                        if(agent.cargoType === 'goods') dest.goods += agent.cargoAmount;
+                        if(agent.cargoType === 'passengers') dest.population += agent.cargoAmount;
+                    }
+                    tradeShips = tradeShips.filter(ts => ts.id !== agent.id);
+                } else if (agent.type === 'trader') {
+                    traders = traders.filter(t => t.id !== agent.id);
+                }
+                return;
+            };
+            
+            const rY = Math.round(agent.y);
+            const rX = Math.round(agent.x);
+            if(rY < 0 || rY >= MAP_HEIGHT || rX < 0 || rX >= MAP_WIDTH) return;
+
+            const iceSlowdown = iceMap[rY][rX];
+            if(Math.random() > iceSlowdown * 0.5 || agent.type === 'trader') { // Traders not affected by ice
+                const nextPos = agent.path[agent.progress];
+                if(nextPos) {
+                    agent.x = nextPos.x;
+                    agent.y = nextPos.y;
+                    agent.progress++;
+                }
+            }
+        });
+    }
+
+    function spawnScheduledTraders() {
+        if (settlements.length < 2) return;
+
+        const dayOfWeek = day % 7;
+        let pairIndex = 0;
+
+        for (let i = 0; i < settlements.length; i++) {
+            for (let j = i + 1; j < settlements.length; j++) {
+                if (dayOfWeek === (pairIndex % 7)) {
+                    createTrader(settlements[i], settlements[j]);
+                }
+                pairIndex++;
+            }
+        }
+    }
+
+
+    // --- MAIN SIMULATION & RENDER LOOPS ---
+    function simulationTick() {
+        tickCounter++;
+        
+        // Per-tick updates
+        updateFauna();
+        updateAgents();
+
+        // Per-day updates
+        if (tickCounter % TICKS_PER_DAY === 0) {
+            day++;
+            
+            updateWeather();
+            updateCloudsAndWeather();
+            updateSurfaceWater();
+            updateIce();
+            updateWaterFlow();
+            updateVegetationHealth();
+            spawnScheduledTraders();
+
+            if (day % 100 === 0) updateCivilization();
+            if (day % 30 === 0) updateErosion();
+            if (day % YEAR_LENGTH === 0) updateEcology();
+
+            dayEl.textContent = day;
+            seasonEl.textContent = getSeasonName();
+        }
+
+        seagullPopEl.textContent = seagulls.length;
+        mackerelPopEl.textContent = mackerel.length;
+    }
+    
+    function getSeasonName() {
+        const dayInYear = (day - 1) % YEAR_LENGTH;
+        if (dayInYear < 91) return 'Spring';
+        if (dayInYear < 182) return 'Summer';
+        if (dayInYear < 273) return 'Autumn';
+        return 'Winter';
+    }
+
+    function renderLoop() {
+        const currentSeason = getSeasonName();
+        if (currentSeason !== lastSeason || day % 2 === 0) {
+             staticMapDirty = true;
+             lastSeason = currentSeason;
+        }
+        updateCurrentParticles();
+        drawMap();
+        requestAnimationFrame(renderLoop);
+    }
+
+    // --- EVENT LISTENERS & INITIALIZATION ---
+    function handleResize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        view.offsetX = (canvas.width - MAP_WIDTH * view.zoom) / 2;
+        view.offsetY = (canvas.height - MAP_HEIGHT * view.zoom) / 2;
+    }
+    
+    function setupSimulation() {
+        if (simulationInterval) clearInterval(simulationInterval);
+        const speed = (1050 / speedSlider.value) / TICKS_PER_DAY;
+        simulationInterval = setInterval(simulationTick, speed);
+    }
+
+    function changeView() {
+        const currentView = viewModeSelect.value;
+        terrainLegend.classList.toggle('hidden', currentView !== 'terrain');
+        civilizationLegend.classList.toggle('hidden', currentView !== 'civilization');
+        tradeLegend.classList.toggle('hidden', currentView !== 'trade');
+        roadLegend.classList.toggle('hidden', currentView !== 'road');
+        tempLegend.classList.toggle('hidden', currentView !== 'temp');
+        weatherLegend.classList.toggle('hidden', currentView !== 'weather');
+        flowLegend.classList.toggle('hidden', currentView !== 'flow');
+        groundwaterLegend.classList.toggle('hidden', currentView !== 'groundwater');
+        currentsLegend.classList.toggle('hidden', currentView !== 'currents');
+    }
+    
+    speedSlider.addEventListener('input', setupSimulation);
+    viewModeSelect.addEventListener('change', changeView);
+    oceanCurrentSelect.addEventListener('change', initializeOceanCurrents);
+    regenButton.addEventListener('click', () => {
+        if (regenButton.classList.contains('loading')) return;
+        day = 1;
+        tickCounter = 0;
+        lastSeason = '';
+        generateMap();
+    });
+    toggleUiButton.addEventListener('click', () => { uiOverlay.classList.toggle('visible'); });
+    hoverDebugCheckbox.addEventListener('change', () => { if (!hoverDebugCheckbox.checked) tooltipEl.classList.add('hidden');});
+
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const worldX = (mouseX - view.offsetX) / view.zoom;
+        const worldY = (mouseY - view.offsetY) / view.zoom;
+        const zoomFactor = 0.9;
+        const newZoom = e.deltaY > 0 ? view.zoom * zoomFactor : view.zoom / zoomFactor;
+        view.zoom = Math.max(0.5, Math.min(50, newZoom));
+        view.offsetX = mouseX - worldX * view.zoom;
+        view.offsetY = mouseY - worldY * view.zoom;
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        view.isPanning = true;
+        view.panStart.x = e.clientX - view.offsetX;
+        view.panStart.y = e.clientY - view.offsetY;
+        canvas.style.cursor = 'grabbing';
+    });
+    
+    canvas.addEventListener('mouseup', () => { view.isPanning = false; canvas.style.cursor = 'grab'; });
+    canvas.addEventListener('mouseleave', () => { view.isPanning = false; canvas.style.cursor = 'default'; tooltipEl.classList.add('hidden');});
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (view.isPanning) {
+            view.offsetX = e.clientX - view.panStart.x;
+            view.offsetY = e.clientY - view.panStart.y;
+        } else {
+            canvas.style.cursor = 'grab';
+        }
+
+        if (hoverDebugCheckbox.checked) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mapX = Math.floor((mouseX - view.offsetX) / view.zoom);
+            const mapY = Math.floor((mouseY - view.offsetY) / view.zoom);
+
+            if (mapX >= 0 && mapX < MAP_WIDTH && mapY >= 0 && mapY < MAP_HEIGHT) {
+                const humanTile = humanMap[mapY][mapX];
+                const biome = getBiome(elevationMap[mapY][mapX], mapX, mapY);
+                
+                let settlementInfo = '';
+                if (humanTile) {
+                    const settlement = settlements.find(s => s.id === humanTile.id);
+                    if (settlement) {
+                        settlementInfo = `
+                            <span>Name:</span><span>${settlement.name}</span>
+                            <span>Pop:</span><span>${Math.floor(settlement.population) || 0}</span>
+                            <span>Food:</span><span>${settlement.food.toFixed(0)}</span>
+                            <span>Goods:</span><span>${settlement.goods.toFixed(0)}</span>
+                            <span>Happy:</span><span>${(settlement.happiness * 100).toFixed(0)}%</span>
+                        `;
+                    }
+                }
+
+                let riverText = (riverMap[mapY][mapX] === 1) ? "River" : (riverMap[mapY][mapX] === 2) ? "Lake" : "None";
+                tooltipEl.innerHTML = `
+                    <div class="grid grid-cols-2 gap-x-2">
+                        <span>Coords:</span><span>${mapX}, ${mapY}</span>
+                        <span>Biome:</span><span>${biome.name}</span>
+                        ${settlementInfo}
+                        <span>Elevation:</span><span>${elevationMap[mapY][mapX].toFixed(3)}</span>
+                        <span>Temp:</span><span>${temperatureMap[mapY][mapX].toFixed(1)}°C</span>
+                        <span>Cloud:</span><span>${(cloudMap[mapY][mapX] * 100).toFixed(0)}%</span>
+                        <span>Snow:</span><span>${snowMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Water:</span><span>${waterMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Groundwater:</span><span>${groundwaterMap[mapY][mapX].toFixed(2)}</span>
+                        <span>River/Lake:</span><span>${riverText}</span>
+                        <span>Ice:</span><span>${iceMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Salinity:</span><span>${salinityMap[mapY][mapX].toFixed(2)}</span>
+                        <span>Forest:</span><span>${(forestMap[mapY][mapX] * 100).toFixed(0)}%</span>
+                    </div>`;
+                const tooltipRect = tooltipEl.getBoundingClientRect();
+                let newX = e.clientX + 15;
+                let newY = e.clientY + 15;
+                if (newX + tooltipRect.width > window.innerWidth) newX = e.clientX - tooltipRect.width - 15;
+                if (newY + tooltipRect.height > window.innerHeight) newY = e.clientY - tooltipRect.height - 15;
+                tooltipEl.style.left = `${newX}px`;
+                tooltipEl.style.top = `${newY}px`;
+                tooltipEl.classList.remove('hidden');
+            } else {
+                tooltipEl.classList.add('hidden');
+            }
+        }
+    });
+    
+    window.addEventListener('resize', handleResize);
+    
+    // Initial setup
+    generateMap();
+    handleResize();
+    setupSimulation();
+    changeView();
+    renderLoop();
+
+</script>
+
+</body>
+</html>
+
