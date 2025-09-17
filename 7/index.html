@@ -1156,10 +1156,10 @@
             ctx.globalAlpha = 0.9;
             
             for(const m of mackerel) {
-                ctx.fillStyle = '#3498db';
+                ctx.fillStyle = 'rgba(52, 152, 219, 0.6)';
                 const screenX = m.x * view.zoom + view.offsetX;
                 const screenY = m.y * view.zoom + view.offsetY;
-                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize * 0.8, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(screenX, screenY, animalSize * 0.6, 0, Math.PI * 2); ctx.fill();
             }
             for(const p of seagulls) {
                 ctx.fillStyle = '#e0e0e0';
@@ -1169,6 +1169,26 @@
             }
             ctx.globalAlpha = 1.0;
         }
+
+        // Debug drawing for fishing boats
+        if (hoverDebugCheckbox.checked) {
+            fishingBoats.forEach(boat => {
+                if (boat.state === 'seeking' && boat.path && boat.path.length > 0) {
+                    const startX = boat.x * view.zoom + view.offsetX;
+                    const startY = boat.y * view.zoom + view.offsetY;
+                    const end = boat.path[boat.path.length-1];
+                    const endX = end.x * view.zoom + view.offsetX;
+                    const endY = end.y * view.zoom + view.offsetY;
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.strokeStyle = 'red';
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+            });
+        }
+
 
         const allMovers = [ship, ...tradeShips, ...fishingBoats, ...traders].filter(s => s);
         allMovers.forEach(s => {
@@ -2225,6 +2245,3 @@
 
 </body>
 </html>
-
-
-
