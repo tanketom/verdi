@@ -255,7 +255,7 @@
     const TEMP_AMPLITUDE = 17.5; 
     const MACKEREL_START_POP = 200;
     const SEAGULL_START_POP = 20;
-    const NUM_SETTLEMENTS = 4;
+    const NUM_SETTLEMENTS = 5;
     const HUMAN_TILE_TYPES = {
         SETTLEMENT: 1,
         FARMLAND: 2,
@@ -591,43 +591,34 @@
         }
         
         // Calculate potential trade routes for the Road View
-        for (let i = 0; i < settlements.length; i++) {
-            for (let j = i + 1; j < settlements.length; j++) {
-                const s1 = settlements[i];
-                const s2 = settlements[j];
-                const path = findPath(s1.tiles[0], s2.tiles[0], false); // false for land path
-                if (path) {
-            potentialTradeRoutes.push(path);
-        }
+        recalculatePotentialTradeRoutes();
+
+        // Schedule the first check for a new settlement
+        nextSettlementCheckDay = day + 365 + Math.floor(Math.random() * 365);
+
+        staticMapDirty = true;
     }
-}
 
-// Schedule the first check for a new settlement
-nextSettlementCheckDay = day + 365 + Math.floor(Math.random() * 365);
+    function createSettlement(location, type = 'default') {
+        const id = crypto.randomUUID();
+        const isOutpost = type !== 'default';
+        const newSettlement = {
+            id: id, name: generateSettlementName(type),
+            tiles: [{x: location.x, y: location.y, type: HUMAN_TILE_TYPES.SETTLEMENT }],
+            population: isOutpost ? 5 : 10,
+            food: isOutpost ? 50 : 100,
+            wood: isOutpost ? 20 : 50,
+            goods: isOutpost ? 5 : 10,
+            happiness: 1.0, port: null, migrants: 0,
+            settlementType: type
+        };
+        settlements.push(newSettlement);
+        humanMap[location.y][location.x] = {type: HUMAN_TILE_TYPES.SETTLEMENT, id: id};
+        establishPort(newSettlement);
+        recalculatePotentialTradeRoutes();
+    }
 
-staticMapDirty = true;
-}
-
-function createSettlement(location, type = 'default') {
-    const id = crypto.randomUUID();
-    const isOutpost = type !== 'default';
-    const newSettlement = {
-        id: id, name: generateSettlementName(type),
-        tiles: [{x: location.x, y: location.y, type: HUMAN_TILE_TYPES.SETTLEMENT }],
-        population: isOutpost ? 5 : 10,
-        food: isOutpost ? 50 : 100,
-        wood: isOutpost ? 20 : 50,
-        goods: isOutpost ? 5 : 10,
-        happiness: 1.0, port: null, migrants: 0,
-        settlementType: type
-    };
-    settlements.push(newSettlement);
-    humanMap[location.y][location.x] = {type: HUMAN_TILE_TYPES.SETTLEMENT, id: id};
-    establishPort(newSettlement);
-}
-
-
-function findSettlementLocation(mustBeCoastal = false) {
+    function findSettlementLocation(mustBeCoastal = false) {
         let bestLocation = null;
         let maxScore = -Infinity;
 
@@ -714,6 +705,20 @@ function findSettlementLocation(mustBeCoastal = false) {
         return bestLocation;
     }
     
+    function recalculatePotentialTradeRoutes() {
+        potentialTradeRoutes = [];
+        for (let i = 0; i < settlements.length; i++) {
+            for (let j = i + 1; j < settlements.length; j++) {
+                const s1 = settlements[i];
+                const s2 = settlements[j];
+                const path = findPath(s1.tiles[0], s2.tiles[0], false); // false for land path
+                if (path) {
+                    potentialTradeRoutes.push(path);
+                }
+            }
+        }
+    }
+
     function generateRiversAndLakes() {
         riverMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
         let lakeOutlets = [];
@@ -1866,15 +1871,6 @@ function findSettlementLocation(mustBeCoastal = false) {
                     s.wood -= settlementTiles.length * 10;
                     s.tiles.push({x: bestTile.x, y: bestTile.y, type: HUMAN_TILE_TYPES.SETTLEMENT});
                     humanMap[bestTile.y][bestTile.x] = {type: HUMAN_TILE_TYPES.SETTLEMENT, id: s.id};
-                    mapNeedsRedraw = true;
-                }
-            }
-
-            if (s.food < s.population * 5 && s.population > 12) {
-                const bestTile = findBestTileForExpansion(s.tiles, HUMAN_TILE_TYPES.FARMLAND);
-                 if(bestTile) {
-                    s.tiles.push({x: bestTile.x, y: bestTile.y, type: HUMAN_TILE_TYPES.FARMLAND});
-                    humanMap[bestTile.y][bestTile.x] = {type: HUMAN_TILE_TYPES.FARMLAND, id: s.id};
                     mapNeedsRedraw = true;
                 }
             }
