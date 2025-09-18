@@ -125,20 +125,20 @@
             <div id="terrain-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel">
                 <h3 class="text-lg font-semibold text-center mb-2 text-cyan-400">Terrain Legend</h3>
                 <div class="grid grid-cols-2 gap-2 text-sm">
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #003366;"></div><span>Deep Ocean</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #006699;"></div><span>Ocean</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #E0D5A3;"></div><span>Beach</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #55a630;"></div><span>Lowlands</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #ad9465;"></div><span>Farmland</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #2b9348;"></div><span>Hills</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #0d370d;"></div><span>Forest</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #808080;"></div><span>Mountain</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #B0B0B0;"></div><span>Peak</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #aed6f1;"></div><span>Ice</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #dc2626;"></div><span>Settlement</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #a855f7;"></div><span>Port</span></div>
-                      <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #4a4a4a;"></div><span>Road</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #003366;"></div><span>Deep Ocean</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #006699;"></div><span>Ocean</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #E0D5A3;"></div><span>Beach</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #55a630;"></div><span>Lowlands</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #ad9465;"></div><span>Farmland</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #2b9348;"></div><span>Hills</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #0d370d;"></div><span>Forest</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #808080;"></div><span>Mountain</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #B0B0B0;"></div><span>Peak</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #3498db;"></div><span>River/Lake</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #aed6f1;"></div><span>Ice</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #dc2626;"></div><span>Settlement</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #a855f7;"></div><span>Port</span></div>
+                        <div class="flex items-center space-x-2"><div class="w-4 h-4 rounded" style="background-color: #4a4a4a;"></div><span>Road</span></div>
                 </div>
             </div>
              <div id="civilization-legend" class="mt-4 p-3 bg-gray-700/50 rounded-lg info-panel hidden">
@@ -306,17 +306,48 @@
     let fishingBoats = [];
     let traders = [];
     let potentialTradeRoutes = [];
+    let nextSettlementCheckDay = 0;
+    let allIslands = []; // array of islands, where each island is an array of tiles {x,y}
+    let tileToIslandMap = new Map(); // key 'x,y' -> island index
     
     // --- NAME GENERATION ---
     const NAME_PREFIXES = ["Stone", "Iron", "Clear", "North", "South", "East", "West", "Fair", "High", "Low", "Oak", "Pine", "Elk", "River", "Lake"];
     const NAME_SUFFIXES = ["wood", "haven", "stead", "gard", "by", "port", "fall", "view", "dale", "wick", "thorp"];
 
-    function generateSettlementName() {
+    const MINING_PREFIXES = ["Stone", "Iron", "Rock", "Crag", "Gravel"];
+    const MINING_SUFFIXES = ["break", "dig", "mine", "delve", "pit"];
+    const LOGGING_PREFIXES = ["Timber", "Oak", "Pine", "Wood", "Green"];
+    const LOGGING_SUFFIXES = ["fall", "chop", "glade", "felling", "grove"];
+    const TRADING_PREFIXES = ["Cross", "Way", "Trade", "Far", "Mid"];
+    const TRADING_SUFFIXES = ["point", "post", "meet", "road", "rest"];
+
+    function generateSettlementName(type = 'default') {
         let name;
         let attempts = 0;
+        let prefixes, suffixes;
+
+        switch (type) {
+            case 'mining':
+                prefixes = MINING_PREFIXES;
+                suffixes = MINING_SUFFIXES;
+                break;
+            case 'logging':
+                prefixes = LOGGING_PREFIXES;
+                suffixes = LOGGING_SUFFIXES;
+                break;
+            case 'trading':
+                prefixes = TRADING_PREFIXES;
+                suffixes = TRADING_SUFFIXES;
+                break;
+            default:
+                prefixes = NAME_PREFIXES;
+                suffixes = NAME_SUFFIXES;
+                break;
+        }
+
         do {
-            const prefix = NAME_PREFIXES[Math.floor(Math.random() * NAME_PREFIXES.length)];
-            const suffix = NAME_SUFFIXES[Math.floor(Math.random() * NAME_SUFFIXES.length)];
+            const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+            const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
             name = `${prefix}${suffix}`;
             attempts++;
         } while (settlements.some(s => s.name === name) && attempts < 50); // Avoid duplicate names
@@ -539,29 +570,37 @@
                 const s2 = settlements[j];
                 const path = findPath(s1.tiles[0], s2.tiles[0], false); // false for land path
                 if (path) {
-                    potentialTradeRoutes.push(path);
-                }
-            }
+            potentialTradeRoutes.push(path);
         }
-
-        staticMapDirty = true;
     }
+}
 
-    function createSettlement(location) {
-        const id = crypto.randomUUID();
-        const newSettlement = {
-            id: id, name: generateSettlementName(),
-            tiles: [{x: location.x, y: location.y, type: HUMAN_TILE_TYPES.SETTLEMENT }],
-            population: 10, food: 100, wood: 50, goods: 10,
-            happiness: 1.0, port: null, migrants: 0,
-        };
-        settlements.push(newSettlement);
-        humanMap[location.y][location.x] = {type: HUMAN_TILE_TYPES.SETTLEMENT, id: id};
-        establishPort(newSettlement);
-    }
+// Schedule the first check for a new settlement
+nextSettlementCheckDay = day + 365 + Math.floor(Math.random() * 365);
+
+staticMapDirty = true;
+}
+
+function createSettlement(location, type = 'default') {
+    const id = crypto.randomUUID();
+    const isOutpost = type !== 'default';
+    const newSettlement = {
+        id: id, name: generateSettlementName(type),
+        tiles: [{x: location.x, y: location.y, type: HUMAN_TILE_TYPES.SETTLEMENT }],
+        population: isOutpost ? 5 : 10,
+        food: isOutpost ? 50 : 100,
+        wood: isOutpost ? 20 : 50,
+        goods: isOutpost ? 5 : 10,
+        happiness: 1.0, port: null, migrants: 0,
+        settlementType: type
+    };
+    settlements.push(newSettlement);
+    humanMap[location.y][location.x] = {type: HUMAN_TILE_TYPES.SETTLEMENT, id: id};
+    establishPort(newSettlement);
+}
 
 
-    function findSettlementLocation(mustBeCoastal = false) {
+function findSettlementLocation(mustBeCoastal = false) {
         let bestLocation = null;
         let maxScore = -Infinity;
 
@@ -572,21 +611,48 @@
                 let isNearFreshwater = false;
                 let isNearCoast = false;
 
+                // Stricter check: is the location DIRECTLY on the coast? (1-tile radius)
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                            if (getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.OCEAN) {
+                                isNearCoast = true;
+                                break;
+                            }
+                        }
+                    }
+                    if(isNearCoast) break;
+                }
+                
+                // Check for freshwater separately in a wider radius
                 for (let dy = -3; dy <= 3; dy++) {
                     for (let dx = -3; dx <= 3; dx++) {
                         const nx = x + dx;
                         const ny = y + dy;
                         if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
-                            if (riverMap[ny][nx] > 0) isNearFreshwater = true;
-                            if (getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.OCEAN) isNearCoast = true;
+                            if (riverMap[ny][nx] > 0) {
+                                isNearFreshwater = true;
+                                break;
+                            }
                         }
                     }
+                    if(isNearFreshwater) break;
                 }
+
 
                 if (mustBeCoastal && !isNearCoast) continue;
                 if (!isNearFreshwater) continue;
                 
                 let score = 100;
+                
+                // Give a massive score bonus for being near the coast.
+                // This makes all settlements heavily prefer coastal locations.
+                if (isNearCoast) {
+                    score += 10000;
+                }
 
                 let avgFertility = 0;
                 let count = 0;
@@ -850,6 +916,7 @@
             initializeSalinity();
             initializeOceanCurrents();
             preGrowForests();
+            identifyIslands();
             
             [snowMap, waterMap, iceMap, annualPrecipitationMap, cloudMap, temperatureMap, groundwaterMap].forEach(m => m.forEach(r => r.fill(0)));
             vegetationHealthMap.forEach(r => r.fill(1.0));
@@ -884,6 +951,41 @@
         return BIOMES.PEAK;
     }
     
+    function identifyIslands() {
+        allIslands = [];
+        tileToIslandMap.clear();
+        const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (elevationMap[y][x] > BIOMES.OCEAN.threshold && !visited[y][x]) {
+                    const currentIslandTiles = [];
+                    const queue = [{x, y}];
+                    visited[y][x] = true;
+                    const islandIndex = allIslands.length;
+
+                    while(queue.length > 0) {
+                        const cell = queue.shift();
+                        currentIslandTiles.push(cell);
+                        tileToIslandMap.set(`${cell.x},${cell.y}`, islandIndex);
+
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = cell.x + dx, ny = cell.y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && !visited[ny][nx] && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
+                                visited[ny][nx] = true;
+                                queue.push({x: nx, y: ny});
+                            }
+                        }
+                    }
+                    if (currentIslandTiles.length > 0) {
+                        allIslands.push(currentIslandTiles);
+                    }
+                }
+            }
+        }
+    }
+
     // --- RENDERING ---
     function drawStaticMapToOffscreenBuffer() {
         const dayOfYear = (day - 1) % YEAR_LENGTH;
@@ -931,7 +1033,7 @@
                     offscreenCtx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, shade * 0.1)})`;
                     offscreenCtx.fillRect(x, y, 1, 1);
                 }
-                 
+                
                 if (riverMap[y][x] === 2) {
                     offscreenCtx.fillStyle = '#3498db';
                     offscreenCtx.fillRect(x, y, 1, 1);
@@ -941,8 +1043,8 @@
                 }
 
                 if (pathUsageMap[y][x] > 0 && !humanMap[y][x]) {
-                       offscreenCtx.fillStyle = `rgba(${BIOMES.ROAD.color.join(',')}, ${Math.min(pathUsageMap[y][x] / 50, 0.8)})`;
-                       offscreenCtx.fillRect(x, y, 1, 1);
+                        offscreenCtx.fillStyle = `rgba(${BIOMES.ROAD.color.join(',')}, ${Math.min(pathUsageMap[y][x] / 50, 0.8)})`;
+                        offscreenCtx.fillRect(x, y, 1, 1);
                 }
             }
         }
@@ -997,23 +1099,12 @@
                         }
                     }
                 } else if (riverMap[y][x] > 0) {
-                     const shimmerPhase = (tickCounter * 0.15 + x * 0.4 - y * 0.2);
-                     const shimmerAlpha = (Math.sin(shimmerPhase) * 0.5 + 0.5) * 0.2;
-                     if (shimmerAlpha > 0.05) {
-                         ctx.fillStyle = `rgba(255, 255, 255, ${shimmerAlpha})`;
-                         ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
-                     }
-                } else {
-                    const season = getSeasonName();
-                    if ((season === 'Spring' || season === 'Summer') && (biome === BIOMES.LOWLANDS || biome === BIOMES.HILLS)) {
-                        let hash = x * 31 + y * 17;
-                        hash = (hash * 31 + Math.floor(day / 10)) % 1000;
-                        if (hash < 5) {
-                            const flowerColors = ['#ff6b6b', '#f9ca24', '#f0932b'];
-                            ctx.fillStyle = flowerColors[hash % flowerColors.length];
-                            ctx.fillRect(screenX, screenY, Math.max(1, view.zoom * 0.3), Math.max(1, view.zoom * 0.3));
-                        }
-                    }
+                      const shimmerPhase = (tickCounter * 0.15 + x * 0.4 - y * 0.2);
+                      const shimmerAlpha = (Math.sin(shimmerPhase) * 0.5 + 0.5) * 0.2;
+                      if (shimmerAlpha > 0.05) {
+                          ctx.fillStyle = `rgba(255, 255, 255, ${shimmerAlpha})`;
+                          ctx.fillRect(screenX, screenY, renderWidth, renderHeight);
+                      }
                 }
                 // --- END VISUAL POLISH ---
 
@@ -1076,13 +1167,13 @@
                 
                 if (viewMode === 'terrain' || viewMode === 'weather' || viewMode === 'trade') {
                      if (riverMap[y][x] === 1) {
-                        const riverAlpha = Math.min(0.3 + waterMap[y][x] * 3.0, 1.0);
-                        if(riverAlpha > 0.31){
-                            const ceilZoom = Math.ceil(view.zoom);
-                            const riverWidthBonus = Math.min(waterMap[y][x] * 20, ceilZoom * 0.8);
-                            ctx.fillStyle = `rgba(82, 172, 229, ${riverAlpha})`;
-                            ctx.fillRect(screenX - riverWidthBonus / 2, screenY - riverWidthBonus/2, renderWidth + riverWidthBonus, renderHeight + riverWidthBonus);
-                        }
+                         const riverAlpha = Math.min(0.3 + waterMap[y][x] * 3.0, 1.0);
+                         if(riverAlpha > 0.31){
+                             const ceilZoom = Math.ceil(view.zoom);
+                             const riverWidthBonus = Math.min(waterMap[y][x] * 20, ceilZoom * 0.8);
+                             ctx.fillStyle = `rgba(82, 172, 229, ${riverAlpha})`;
+                             ctx.fillRect(screenX - riverWidthBonus / 2, screenY - riverWidthBonus/2, renderWidth + riverWidthBonus, renderHeight + riverWidthBonus);
+                         }
                     }
 
                     if (waterMap[y][x] > 0.1 && riverMap[y][x] === 0) {
@@ -1202,7 +1293,9 @@
                 const shipHeight = s.type === 'fishing' ? Math.max(0.8, view.zoom * 0.5) : Math.max(1, view.zoom * 0.8);
                 ctx.fillStyle = '#8B4513'; // Hull
                 ctx.fillRect(screenX - shipWidth / 2, screenY - shipHeight / 2, shipWidth, shipHeight);
-                ctx.fillStyle = '#FFFFFF'; // Sail
+                
+                const sailColor = (s.type === 'trade' && s.subType === 'land-replacement') ? '#60a5fa' : '#FFFFFF'; // Blue for special trade boats
+                ctx.fillStyle = sailColor; // Sail
                 ctx.fillRect(screenX - shipWidth * 0.1, screenY - shipHeight * 1.5, shipWidth * 0.2, shipHeight * 1.2);
             }
         });
@@ -1445,26 +1538,26 @@
             for(let y = startY; y < endY; y++) {
                 for(let x = startX; x < endX; x++) {
                      if (riverMap[y][x] === 1 && waterMap[y][x] > 0.1) {
-                        let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[y][x] };
-                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-                            if(dx === 0 && dy === 0) continue;
-                            const nx = x + dx, ny = y + dy;
-                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
-                                if (elevationMap[ny][nx] < lowestNeighbor.elevation) {
-                                    lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
-                                }
-                            }
-                        }
-                        if(lowestNeighbor.x !== -1) {
-                            const slope = elevationMap[y][x] - lowestNeighbor.elevation;
-                            const biome = getBiome(elevationMap[y][x], x, y);
-                            const resistance = biome.resistance || 10;
-                            const erosionAmount = erosionRate * waterMap[y][x] * slope * (1 / resistance);
-                            if (elevationMap[y][x] > BIOMES.OCEAN.threshold + erosionAmount) {
-                                elevationMap[y][x] -= erosionAmount;
-                                mapDirty = true;
-                            }
-                        }
+                         let lowestNeighbor = { x: -1, y: -1, elevation: elevationMap[y][x] };
+                         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                             if(dx === 0 && dy === 0) continue;
+                             const nx = x + dx, ny = y + dy;
+                             if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                                 if (elevationMap[ny][nx] < lowestNeighbor.elevation) {
+                                     lowestNeighbor = { x: nx, y: ny, elevation: elevationMap[ny][nx] };
+                                 }
+                             }
+                         }
+                         if(lowestNeighbor.x !== -1) {
+                             const slope = elevationMap[y][x] - lowestNeighbor.elevation;
+                             const biome = getBiome(elevationMap[y][x], x, y);
+                             const resistance = biome.resistance || 10;
+                             const erosionAmount = erosionRate * waterMap[y][x] * slope * (1 / resistance);
+                             if (elevationMap[y][x] > BIOMES.OCEAN.threshold + erosionAmount) {
+                                 elevationMap[y][x] -= erosionAmount;
+                                 mapDirty = true;
+                             }
+                         }
                     }
                 }
             }
@@ -1811,6 +1904,229 @@
         if (mapNeedsRedraw) staticMapDirty = true;
         populationTotalEl.textContent = Math.floor(totalPopulation);
     }
+
+    function isIslandInhabited(islandIndex) {
+        if (islandIndex === undefined || !allIslands[islandIndex]) return true; // Fail safe
+        const islandTiles = allIslands[islandIndex];
+        for (const tile of islandTiles) {
+            if (humanMap[tile.y][tile.x]) {
+                return true; // Found a settlement
+            }
+        }
+        return false;
+    }
+
+    function findMiningOutpostLocation() {
+        let bestLocation = null;
+        let maxScore = -Infinity;
+
+        for (let y = 1; y < MAP_HEIGHT - 1; y++) {
+            for (let x = 1; x < MAP_WIDTH - 1; x++) {
+                // Can only build on lowlands or hills, and not on an existing human tile
+                const tileBiome = getBiome(elevationMap[y][x], x, y);
+                if ((tileBiome !== BIOMES.LOWLANDS && tileBiome !== BIOMES.HILLS) || humanMap[y][x]) continue;
+
+                const islandIndex = tileToIslandMap.get(`${x},${y}`);
+                if (islandIndex === undefined) continue;
+
+                if (!isIslandInhabited(islandIndex)) {
+                    // This is a new island, the outpost MUST be coastal.
+                    let isCoastal = false;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = x + dx; const ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.OCEAN) {
+                                isCoastal = true;
+                                break;
+                            }
+                        }
+                        if(isCoastal) break;
+                    }
+                    if (!isCoastal) continue; // If it's a new island and not a coastal spot, skip it.
+                }
+
+                let score = 0;
+                let isNearMountain = false;
+
+                // Check for adjacent mountains
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                            if (getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.MOUNTAIN) {
+                                score += 10;
+                                isNearMountain = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!isNearMountain) continue;
+
+                // Bonus for being far from other settlements
+                let minDistance = Infinity;
+                settlements.forEach(s => {
+                    const dist = Math.hypot(x - s.tiles[0].x, y - s.tiles[0].y);
+                    if (dist < minDistance) minDistance = dist;
+                });
+                if (minDistance > 15) score += minDistance * 2;
+                else continue; // Too close to an existing settlement
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestLocation = { x, y, score };
+                }
+            }
+        }
+        return bestLocation;
+    }
+
+    function findLoggingOutpostLocation() {
+        let bestLocation = null;
+        let maxScore = -Infinity;
+
+        for (let y = 1; y < MAP_HEIGHT - 1; y++) {
+            for (let x = 1; x < MAP_WIDTH - 1; x++) {
+                const tileBiome = getBiome(elevationMap[y][x], x, y);
+                if (tileBiome !== BIOMES.LOWLANDS || humanMap[y][x]) continue;
+
+                const islandIndex = tileToIslandMap.get(`${x},${y}`);
+                if (islandIndex === undefined) continue;
+
+                if (!isIslandInhabited(islandIndex)) {
+                    // This is a new island, the outpost MUST be coastal.
+                    let isCoastal = false;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                             if (dx === 0 && dy === 0) continue;
+                            const nx = x + dx; const ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.OCEAN) {
+                                isCoastal = true;
+                                break;
+                            }
+                        }
+                        if(isCoastal) break;
+                    }
+                    if (!isCoastal) continue;
+                }
+
+                let forestDensity = 0;
+                // Check for nearby forests
+                for (let dy = -3; dy <= 3; dy++) {
+                    for (let dx = -3; dx <= 3; dx++) {
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                            forestDensity += forestMap[ny][nx];
+                        }
+                    }
+                }
+
+                if (forestDensity < 10) continue; // Not enough forest nearby
+
+                let score = forestDensity;
+
+                let minDistance = Infinity;
+                settlements.forEach(s => {
+                    const dist = Math.hypot(x - s.tiles[0].x, y - s.tiles[0].y);
+                    if (dist < minDistance) minDistance = dist;
+                });
+                if (minDistance > 15) score += minDistance * 2;
+                else continue;
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestLocation = { x, y, score };
+                }
+            }
+        }
+        return bestLocation;
+    }
+
+    function findTradingOutpostLocation() {
+        let bestLocation = null;
+        let maxScore = -Infinity;
+
+        for (let y = 1; y < MAP_HEIGHT - 1; y++) {
+            for (let x = 1; x < MAP_WIDTH - 1; x++) {
+                const tileBiome = getBiome(elevationMap[y][x], x, y);
+                if (tileBiome !== BIOMES.LOWLANDS || humanMap[y][x]) continue;
+
+                const islandIndex = tileToIslandMap.get(`${x},${y}`);
+                if (islandIndex === undefined) continue;
+
+                if (!isIslandInhabited(islandIndex)) {
+                     // This is a new island, the outpost MUST be coastal.
+                    let isCoastal = false;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = x + dx; const ny = y + dy;
+                            if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && getBiome(elevationMap[ny][nx], nx, ny) === BIOMES.OCEAN) {
+                                isCoastal = true;
+                                break;
+                            }
+                        }
+                        if(isCoastal) break;
+                    }
+                    if (!isCoastal) continue;
+                }
+
+                const pathUsage = pathUsageMap[y][x];
+                if (pathUsage < 100) continue; // Not a significant crossroads
+
+                let score = pathUsage;
+
+                let minDistance = Infinity;
+                settlements.forEach(s => {
+                    const dist = Math.hypot(x - s.tiles[0].x, y - s.tiles[0].y);
+                    if (dist < minDistance) minDistance = dist;
+                });
+                if (minDistance > 20) score += minDistance * 5;
+                else continue;
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestLocation = { x, y, score };
+                }
+            }
+        }
+        return bestLocation;
+    }
+
+    function attemptToFoundNewSettlement() {
+        // Determine which type of settlement to found
+        const settlementTypes = ['trading', 'logging', 'mining'];
+        const typeToFound = settlementTypes[Math.floor(Math.random() * settlementTypes.length)];
+
+        let bestLocation = null;
+        switch (typeToFound) {
+            case 'trading':
+                bestLocation = findTradingOutpostLocation();
+                break;
+            case 'logging':
+                bestLocation = findLoggingOutpostLocation();
+                break;
+            case 'mining':
+                bestLocation = findMiningOutpostLocation();
+                break;
+        }
+
+        // If a suitable spot was found (with a minimum score) and the 70% chance passes...
+        if (bestLocation && bestLocation.score > 50 && Math.random() < 0.7) {
+            console.log(`Founding new ${typeToFound} settlement at ${bestLocation.x}, ${bestLocation.y} with score ${bestLocation.score}`);
+            createSettlement({x: bestLocation.x, y: bestLocation.y}, typeToFound);
+            staticMapDirty = true;
+        } else if (bestLocation) {
+            console.log(`Found a potential ${typeToFound} settlement location but failed the 70% chance or score was too low (${bestLocation.score}).`);
+        }
+
+        // Schedule the next check
+        nextSettlementCheckDay = day + 365 + Math.floor(Math.random() * 365);
+        console.log(`Next settlement check scheduled for day ${nextSettlementCheckDay}`);
+    }
     
     function createTrader(s1, s2) {
         if (traders.some(t => (t.homeId === s1.id && t.destinationId === s2.id) || (t.homeId === s2.id && t.destinationId === s1.id))) return;
@@ -1823,6 +2139,13 @@
                 id: crypto.randomUUID(), type: 'trader', x: s1.tiles[0].x, y: s1.tiles[0].y,
                 path: path, progress: 0, homeId: s1.id, destinationId: s2.id,
             });
+        } else {
+            // If no land path, try to spawn a trading boat instead
+            if (s1.port && s2.port && s1.goods > 50) {
+                 // The 'goods' and '50' are arbitrary for this scheduled trade route.
+                 // The main logic for needs-based trade is in updateCivilization.
+                createTradeShip(s1, s2, 'goods', 50, 'land-replacement');
+            }
         }
     }
 
@@ -1856,7 +2179,7 @@
         return bestTile;
     }
     
-    function createTradeShip(s1, s2, type, amount) {
+    function createTradeShip(s1, s2, type, amount, subType = 'default') {
         if (!s1.port || !s2.port || tradeShips.some(ts => ts.homeId === s1.id && ts.destinationId === s2.id)) {
             return;
         }
@@ -1869,26 +2192,83 @@
             tradeShips.push({
                 id: crypto.randomUUID(), type: 'trade', x: s1.port.x, y: s1.port.y,
                 path: path, progress: 0, homeId: s1.id, destinationId: s2.id,
-                cargoType: type, cargoAmount: amount
+                cargoType: type, cargoAmount: amount, subType: subType
             });
         }
     }
 
     function establishPort(settlement) {
         if(settlement.port) return;
-         for(const tile of settlement.tiles) {
-            if (tile.type === HUMAN_TILE_TYPES.SETTLEMENT) {
-                for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++) {
-                    if (dx === 0 && dy === 0) continue;
-                    const nx = tile.x + dx, ny = tile.y + dy;
-                    if(nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) {
-                        settlement.port = {x: nx, y: ny};
-                        humanMap[ny][nx] = { type: HUMAN_TILE_TYPES.PORT, id: settlement.id };
-                        return;
+
+        let bestPortLocation = null;
+        let minDistance = Infinity;
+        let lowestElevationForMinDist = Infinity; // Tie-breaker: deeper water is better
+
+        const settlementLandTiles = settlement.tiles.filter(t => t.type === HUMAN_TILE_TYPES.SETTLEMENT);
+
+        // Create a set of unique potential port locations to check
+        const potentialLocations = new Map();
+        for (const landTile of settlementLandTiles) {
+            for (let dy = -4; dy <= 4; dy++) {
+                for (let dx = -4; dx <= 4; dx++) {
+                    if (Math.hypot(dx, dy) > 4) continue;
+
+                    const nx = landTile.x + dx;
+                    const ny = landTile.y + dy;
+                    const key = `${nx},${ny}`;
+
+                    // Check if the potential location is a valid, unoccupied ocean tile
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT &&
+                        !humanMap[ny][nx] && !potentialLocations.has(key) &&
+                        elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) {
+                        
+                        // Check if this ocean tile is adjacent to ANY of the settlement's land tiles
+                        let isOnShore = false;
+                        for (const checkTile of settlementLandTiles) {
+                            if (Math.hypot(nx - checkTile.x, ny - checkTile.y) < 1.5) { // < 1.5 means adjacent (no diagonals)
+                                isOnShore = true;
+                                break;
+                            }
+                        }
+                        
+                        if(isOnShore) {
+                            potentialLocations.set(key, {x: nx, y: ny});
+                        }
                     }
                 }
             }
-         }
+        }
+
+        // Evaluate all valid shoreline locations
+        for(const location of potentialLocations.values()) {
+            let closestDistToCity = Infinity;
+            for (const cityTile of settlementLandTiles) {
+                const dist = Math.hypot(location.x - cityTile.x, location.y - cityTile.y);
+                if (dist < closestDistToCity) {
+                    closestDistToCity = dist;
+                }
+            }
+            
+            const elevation = elevationMap[location.y][location.x];
+
+            // Main selection logic: prioritize closest, then deepest
+            if (closestDistToCity < minDistance) {
+                minDistance = closestDistToCity;
+                lowestElevationForMinDist = elevation;
+                bestPortLocation = location;
+            } else if (closestDistToCity === minDistance) {
+                if (elevation < lowestElevationForMinDist) {
+                    lowestElevationForMinDist = elevation;
+                    bestPortLocation = location;
+                }
+            }
+        }
+        
+        // If a suitable location was found, create the port.
+        if (bestPortLocation) {
+            settlement.port = { x: bestPortLocation.x, y: bestPortLocation.y };
+            humanMap[bestPortLocation.y][bestPortLocation.x] = { type: HUMAN_TILE_TYPES.PORT, id: settlement.id };
+        }
     }
     
     function findPath(start, end, isShip = false) {
@@ -2069,12 +2449,16 @@
             updateCloudsAndWeather();
             updateSurfaceWater();
             updateIce();
-            updateWaterFlow();
-            updateVegetationHealth();
-            spawnScheduledTraders();
+        updateWaterFlow();
+        updateVegetationHealth();
+        spawnScheduledTraders();
 
-            if (day % 100 === 0) updateCivilization();
-            if (day % 30 === 0) updateErosion();
+        if (day >= nextSettlementCheckDay) {
+            attemptToFoundNewSettlement();
+        }
+
+        if (day % 100 === 0) updateCivilization();
+        if (day % 30 === 0) updateErosion();
             if (day % YEAR_LENGTH === 0) updateEcology();
 
             dayEl.textContent = day;
