@@ -1,9 +1,12 @@
-# Verdi – mellom bakkar og berg
+# Mellom bakkar og berg
+
+<img width="1090" height="545" alt="Skjermbilde 2025-09-19 kl  09 58 26" src="https://github.com/user-attachments/assets/c2f959d4-b2de-4247-b2c1-6b4a0cad773b" />
 
 > Mellom bakkar og berg ut med havet\
 > Heve nordmannen fenge sin heim\
 > Der han sjølv heve tuftene grave\
-> Og set sjølv sine hus oppå deim
+> Og set sjølv sine hus oppå deim\
+>  – Ivar Aasen, _Nordmannen_
 
 _English below_
 
