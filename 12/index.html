@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Word Terrarium</title>
+    <title>Pixel Civilization Terrarium</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -326,12 +326,16 @@
     let nextCapitolCheckDay = 0;
     let capitolLastPopulation = 0;
     let allIslands = []; // array of islands, where each island is an array of tiles {x,y}
+    let namedPeaks = [];
     let tileToIslandMap = new Map(); // key 'x,y' -> island index
     let foundedSpiritualOutposts = new Set();
     
     // --- NAME GENERATION ---
     const NAME_PREFIXES = ["Stein", "Furu", "Bjørk", "Elv", "Foss", "Nord", "Sør", "Aust", "Vest", "Høg", "Låg", "Grøn", "Kvit", "Lang", "Indre", "Ytre"];
     const NAME_SUFFIXES = ["vik", "nes", "øy", "sund", "gard", "dal", "berg", "strand", "heim", "stad", "li"];
+    const FEATURE_PREFIXES = ["Stor", "Litle", "Grøn", "Svart", "Kvit", "Auste", "Vestre", "Gamle", "Høg"];
+    const ISLAND_SUFFIXES = ["øy", "holm", "land", "nes"];
+    const PEAK_SUFFIXES = ["fjell", "toppen", "tind", "kollen", "nut"];
     const OUTPOST_PREFIXES = {
         trading: ["Bru", "Veg", "Marknad", "Ferge"],
         logging: ["Skau", "Timbre", "Sag", "Furu"],
@@ -340,6 +344,21 @@
         spiritual: ["Heilag", "Gamle", "Stor", "Høg", "Vinter"]
     };
     const OUTPOST_SUFFIXES = ["plass", "krossen", "stø", "li", "holt", "moen", "brudd", "toppen", "grå", "kai", "vær", "kilde", "haugen", "steinen", "lund"];
+
+    function generateFeatureName(type, existingNames) {
+        let name;
+        let attempts = 0;
+        const prefixes = FEATURE_PREFIXES;
+        const suffixes = type === 'island' ? ISLAND_SUFFIXES : PEAK_SUFFIXES;
+        do {
+            const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+            const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
+            name = `${prefix}${suffix}`;
+            attempts++;
+        } while (existingNames.includes(name) && attempts < 50);
+        existingNames.push(name);
+        return name;
+    }
 
     function generateSettlementName(type = 'default') {
         let name;
@@ -963,6 +982,7 @@
             preErode();
             generateRiversAndLakes(); // Re-run to carve new paths after erosion
             identifyIslands();
+            nameMountainPeaks();
             initializeSalinity();
             initializeOceanCurrents();
             initializeFishingGrounds();
@@ -1411,6 +1431,38 @@
             });
         }
 
+
+        // --- DRAW FEATURE NAMES ---
+        if (view.zoom < 4 && view.zoom > 0.7) {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.lineWidth = 4;
+
+            // Draw Island Names
+            allIslands.forEach(island => {
+                if (!island.name) return;
+                const fontSize = Math.min(24, Math.max(10, island.tiles.length / 40)) * view.zoom * 0.5;
+                ctx.font = `bold ${fontSize}px Inter`;
+                ctx.fillStyle = 'white';
+                const screenX = island.centerX * view.zoom + view.offsetX;
+                const screenY = island.centerY * view.zoom + view.offsetY;
+                ctx.strokeText(island.name, screenX, screenY);
+                ctx.fillText(island.name, screenX, screenY);
+            });
+
+            // Draw Peak Names
+            namedPeaks.forEach(peak => {
+                const fontSize = 11 * view.zoom * 0.5;
+                ctx.font = `italic ${fontSize}px Inter`;
+                ctx.fillStyle = '#e5e7eb'; // Lighter grey
+                const screenX = peak.x * view.zoom + view.offsetX + view.zoom / 2;
+                const screenY = peak.y * view.zoom + view.offsetY - view.zoom * 2;
+                const label = `▲ ${peak.name}`;
+                ctx.strokeText(label, screenX, screenY);
+                ctx.fillText(label, screenX, screenY);
+            });
+        }
 
         const allMovers = [ship, ...tradeShips, ...fishingBoats, ...traders].filter(s => s);
         allMovers.forEach(s => {
@@ -3126,6 +3178,7 @@
         allIslands = [];
         tileToIslandMap.clear();
         const visited = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+        const existingFeatureNames = [];
         for (let y = 0; y < MAP_HEIGHT; y++) {
             for (let x = 0; x < MAP_WIDTH; x++) {
                 if (elevationMap[y][x] > BIOMES.OCEAN.threshold && !visited[y][x]) {
@@ -3145,7 +3198,15 @@
                             }
                         }
                     }
-                    allIslands.push(currentIslandTiles);
+                    const islandData = { tiles: currentIslandTiles };
+                    if (currentIslandTiles.length > 20) { // Only name islands with more than 20 tiles
+                        islandData.name = generateFeatureName('island', existingFeatureNames);
+                        let sumX = 0, sumY = 0;
+                        currentIslandTiles.forEach(t => { sumX += t.x; sumY += t.y; });
+                        islandData.centerX = sumX / currentIslandTiles.length;
+                        islandData.centerY = sumY / currentIslandTiles.length;
+                    }
+                    allIslands.push(islandData);
                 }
             }
         }
@@ -3159,23 +3220,53 @@
     }
 
     function findCoastalSpotOnIsland(islandIndex) {
-        const islandTiles = allIslands[islandIndex];
+        if (!allIslands[islandIndex] || !allIslands[islandIndex].tiles) return null;
+        const islandTiles = allIslands[islandIndex].tiles;
         const coastalSpots = islandTiles.filter(tile => {
             const { x, y } = tile;
             if (getBiome(elevationMap[y][x], x, y) !== BIOMES.LOWLANDS || humanMap[y][x]) return false;
-            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-                if (dx === 0 && dy === 0) continue;
-                const nx = x + dx, ny = y + dy;
-                if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) {
-                    return true;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] <= BIOMES.OCEAN.threshold) {
+                        return true;
+                    }
                 }
             }
             return false;
         });
+
         if (coastalSpots.length > 0) {
             return coastalSpots[Math.floor(Math.random() * coastalSpots.length)];
         }
+        
         return null;
+    }
+
+    function nameMountainPeaks() {
+        namedPeaks = [];
+        const existingFeatureNames = allIslands.filter(i => i.name).map(i => i.name);
+
+        allIslands.forEach(island => {
+            if (island.tiles.length < 50) return; // Only look for peaks on significant islands
+
+            let highestPoint = { x: -1, y: -1, elevation: -1 };
+            island.tiles.forEach(tile => {
+                if (elevationMap[tile.y][tile.x] > highestPoint.elevation) {
+                    highestPoint = { x: tile.x, y: tile.y, elevation: elevationMap[tile.y][tile.x] };
+                }
+            });
+
+            if (highestPoint.elevation > BIOMES.MOUNTAIN.threshold) {
+                const peakName = generateFeatureName('peak', existingFeatureNames);
+                namedPeaks.push({
+                    x: highestPoint.x,
+                    y: highestPoint.y,
+                    name: peakName
+                });
+            }
+        });
     }
     
     function spawnPatrolBoats() {
