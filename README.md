@@ -1,4 +1,4 @@
-# Mellom bakkar og berg
+# Pixel Civilization Terrarium
 
 <img width="1090" height="545" alt="Skjermbilde 2025-09-19 kl  09 58 26" src="https://github.com/user-attachments/assets/c2f959d4-b2de-4247-b2c1-6b4a0cad773b" />
 
@@ -14,13 +14,16 @@ _English below_
 
 *Siste versjon*: https://tanketom.github.io/verdi/11/
 
+### Bakkar og berg
 Utgangspunktet er ei prosedural øy skapa ved hjelp av simpleksstøy, som lagar ei øygruppe frå djupe hav og sandstrender til bølgjande åser, og snødekte fjelltoppar. Landskapet er ikkje statisk, ein enkel miljømodell simulerar erosjon og graver ut elver som renner frå fjell til hav, medan skogar spreier seg organisk over tid. Oppå dette ligg eit klimasystem som simulerar temperaturendringar, skydanning og nedbør påverka av vind og terreng. Kombinert med havstraumar skapar dette eit dynamisk vær gjennom året, som har kalde fjelltoppar, lune regnskuggar, og værbitte kystar.
 
+### Fenge sin heim
 Simuleringa blir så fylt med mennesker. Nybyggjarar etablerar fotfeste, og frå dette veks eit samfunn fram. Byar utvider seg, dyrkar landet rundt byane (som hvis åkrar må vekslast på, for å ikkje utarme jorda), og forvandlar områda mellom seg til stiar og vegar basert på kor mange som går mellom byane. Ein permanent hovudstad blir utkåra etter omlag tre år, som blir nasjonens hjarte. Nye busetnadar etter den første handfullen blir organisk laga basert på behov: handelspostar på travle ruter eller vegkryss, hogstleirar nær tette skogar, gruvebyar ved foten av fjell, og ein og anna åndeleg utpost på heilage geografiske stader – til dømes eit kloster på landets høgaste fjell, eit tempel i ein heilag skog, eller tilbedingsstad ved ei viktig elv. Handelsfolk og reisande tek båt og vegane til hjelp for å frakte seg sjølv og varene sine rundtom i riket.
 
+### Og den leiken den ville han sjå
 Det minst dynamiske er dyrelivet. 200 makrell er plassert i havet i byrjinga, og følgjer havstraumar og temperaturpreferansar rundtom i det våte element. Dei er mest glad i å vere samla, som ein sjeldan gong fører til at heile verdas makrellbestand samlar seg i éin gigantisk karusell. Dei blir ikkje færre uansett kor mykje det blir fiska, dei er der mest for å vere ein stad fiskebåtane må dra til og frå. Det einaste reint kosmetiske i heile spelet trur eg er måkene, dei kvite prikkane som flyter over stader dei finn interessant, hovudsakleg menneskeleg aktivitet.
 
-Mindre enn eit faktisk spel er det mest tenkt som ei ambient lita verd ein kan observere, ei klinkekule med fine fargar, som fortel ei unik historie om maur… menn… prikkane som går omkring.
+**Mindre enn eit faktisk spel er det mest tenkt som ei ambient lita verd ein kan observere, ei klinkekule med fine fargar, som fortel ei unik historie om maur… mennes… PRIKKANE som går omkring.**
 
 Zoom med musehjul og dra med musepeikaren for å sjå dei pikselerte detaljane. Bruk innstillingerknappen i øvre høgre hjørnet for å justere på kartvisningar, få "debugge" verda, skru opp farten, lage ei ny øygruppe, og liknande.
 
@@ -58,8 +61,9 @@ På litt halvtilfeldige tidspunkt har eg lagra versjonar her, slik at eg har eit
 
 ## Todo
 * Narrativ
-  * [ ] Bruke bunnen i spelet til å lage ei slags krønike eller nasjonshistorie
+  * [ ]  Bruke bunnen i spelet til å lage ei slags krønike eller nasjonshistorie
   * Random events 
 * Utvide og spesialisere kartvisningane
-  * [ ] Få ei kartvisning som ser ut som eit handteikna gamalt (statisk?) kart
-* [ ] Lære meg å kode, så eg kan gjere desse greiene sjølve i staden for å be ei litt dum, men flink maskin om å gjere det
+  * [ ]  Få ei kartvisning som ser ut som eit handteikna gamalt (statisk?) kart
+* [ ]  Justere matmengd slik at det, teoretisk sett, kan bli ei mangelvare
+* [ ]  Lære meg å kode, så eg kan gjere desse greiene sjølve i staden for å be ei litt dum, men flink maskin om å gjere det
