@@ -486,6 +486,16 @@
     }
 
     // --- INITIALIZATION & GENERATION ---
+    function initializeWorldState() {
+        initializeSalinity();
+        initializeOceanCurrents();
+        initializeFishingGrounds();
+        initializeGeology();
+        preGrowForests();
+        initializeFauna();
+        initializeCivilization();
+    }
+
     function initializeSalinity() {
         salinityMap = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
         for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -983,16 +993,12 @@
             generateRiversAndLakes(); // Re-run to carve new paths after erosion
             identifyIslands();
             nameMountainPeaks();
-            initializeSalinity();
-            initializeOceanCurrents();
-            initializeFishingGrounds();
-            initializeGeology();
-            preGrowForests();
+            
+            initializeWorldState();
             
             [snowMap, waterMap, iceMap, annualPrecipitationMap, cloudMap, temperatureMap, groundwaterMap].forEach(m => m.forEach(r => r.fill(0)));
             vegetationHealthMap.forEach(r => r.fill(1.0));
-            initializeFauna();
-            initializeCivilization();
+
             activeChunks.clear();
             for(let y = 0; y < MAP_HEIGHT; y++) for(let x = 0; x < MAP_WIDTH; x++) {
                 if(riverMap[y][x] > 0) {
@@ -1518,7 +1524,8 @@
     }
 
     // --- SIMULATION LOGIC ---
-    function updateWeather() {
+    function updateAtmosphere() {
+        // --- Formerly updateWeather ---
         const dayOfYear = (day - 1) % YEAR_LENGTH;
         const yearlyBaseTemp = TEMP_AVG - Math.cos((dayOfYear / YEAR_LENGTH) * 2 * Math.PI) * TEMP_AMPLITUDE;
         
@@ -1563,11 +1570,9 @@
         } else {
             avgTempEl.textContent = `N/A`;
         }
-    }
 
-    function updateCloudsAndWeather() {
+        // --- Formerly updateCloudsAndWeather ---
         cloudOffsetX += 0.075 / TICKS_PER_DAY;
-
         const cloudFreq = 5.0 / MAP_WIDTH;
         const windEffectFactor = 8.0, rainShadowFactor = 12.0, peakClearFactor = 1.5;
         let moistureMap = Array(MAP_HEIGHT).fill(1.0);
@@ -1581,7 +1586,6 @@
                 const currentElevation = elevationMap[y][x];
                 let topoEffect = 0;
                 let moistureBonus = 0;
-
                 const upwindX = x - 1;
                 if (upwindX >= 0 && elevationMap[y][upwindX] <= BIOMES.OCEAN.threshold) {
                     const oceanTemp = temperatureMap[y][upwindX];
@@ -1590,8 +1594,6 @@
                          moistureBonus = (oceanTemp - baseOceanTemp) * 0.05;
                     }
                 }
-
-
                  if (currentElevation > BIOMES.OCEAN.threshold) {
                     const upwindElevation = (x > 0) ? elevationMap[y][x - 1] : currentElevation;
                     const slope = (currentElevation - upwindElevation) * 15;
@@ -1615,8 +1617,9 @@
         else if (avgCloudiness > 0.30) weatherEl.textContent = 'Partly Cloudy';
         else weatherEl.textContent = 'Clear';
     }
-    
-    function updateSurfaceWater() {
+
+    function updateHydrology() {
+        // --- Formerly updateSurfaceWater ---
         const meltRate = 0.2, accumulationRate = 0.1, rainAmount = 0.05, maxSnowDepth = 5.0;
         const seepageRate = 0.2;
         for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -1642,7 +1645,6 @@
                         activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
                     }
                 }
-
                 if (waterMap[y][x] > 0.01 && riverMap[y][x] === 0) {
                     const toSeep = waterMap[y][x] * seepageRate;
                     waterMap[y][x] -= toSeep;
@@ -1650,6 +1652,127 @@
                 }
             }
         }
+
+        // --- Formerly updateIce ---
+        const freezeRate = 0.02 / TICKS_PER_DAY, meltRateIce = 0.04 / TICKS_PER_DAY, maxIce = 4.0;
+        const averageWorldTemp = temperatureMap.flat().reduce((a, b) => a + b, 0) / (MAP_WIDTH * MAP_HEIGHT);
+        for(let y=0; y<MAP_HEIGHT; y++) {
+            for(let x=0; x<MAP_WIDTH; x++) {
+                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] > 0) {
+                    const temp = temperatureMap[y][x];
+                    const salinity = salinityMap[y][x];
+                    let freezePoint = 0.0 - (salinity * 2.0);
+                    let canFreeze = false;
+                    if (humanMap[y]?.[x]?.type === HUMAN_TILE_TYPES.PORT) {
+                        freezePoint -= 5;
+                    }
+                    if(temp < freezePoint) {
+                        if (salinity < 0.8 || averageWorldTemp < -20) {
+                            canFreeze = true;
+                        }
+                    }
+                    if(canFreeze) {
+                        iceMap[y][x] = Math.min(maxIce, iceMap[y][x] + (freezePoint - temp) * freezeRate);
+                    } else if (temp > freezePoint && iceMap[y][x] > 0) {
+                        iceMap[y][x] = Math.max(0, iceMap[y][x] - (temp - freezePoint) * meltRateIce);
+                    }
+                }
+            }
+        }
+
+        // --- Formerly updateWaterFlow ---
+        const flowSpeed = 0.5, riverSeepage = 0.005 / TICKS_PER_DAY;
+        const groundwaterFeedRate = 0.01 / TICKS_PER_DAY;
+        const groundwaterDiffusionRate = 0.1 / TICKS_PER_DAY;
+        let nextGroundwaterMap = groundwaterMap.map(arr => arr.slice());
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                 if (elevationMap[y][x] > BIOMES.OCEAN.threshold) {
+                    let neighborSum = 0, neighborCount = 0;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
+                            neighborSum += groundwaterMap[ny][nx];
+                            neighborCount++;
+                        }
+                    }
+                    if (neighborCount > 0) {
+                        const avgNeighbor = neighborSum / neighborCount;
+                        nextGroundwaterMap[y][x] += (avgNeighbor - groundwaterMap[y][x]) * groundwaterDiffusionRate;
+                    }
+                }
+            }
+        }
+        groundwaterMap = nextGroundwaterMap;
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                if (riverMap[y][x] > 0 && groundwaterMap[y][x] > 0) {
+                    const feedAmount = Math.min(groundwaterMap[y][x], groundwaterFeedRate);
+                    groundwaterMap[y][x] -= feedAmount;
+                    waterMap[y][x] += feedAmount;
+                    activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                }
+            }
+        }
+        let waterFromNeighbors = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
+        let nextActiveChunks = new Set();
+        for (const chunkKey of activeChunks) {
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            const startX = chunkX * CHUNK_SIZE, startY = chunkY * CHUNK_SIZE;
+            const endX = Math.min(startX + CHUNK_SIZE, MAP_WIDTH);
+            const endY = Math.min(startY + CHUNK_SIZE, MAP_HEIGHT);
+            for(let y = startY; y < endY; y++) {
+                for(let x = startX; x < endX; x++) {
+                    let currentWater = waterMap[y][x];
+                    if (currentWater <= 0.001 && riverMap[y][x] === 0) continue;
+                    if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] === 2) {
+                        waterFromNeighbors[y][x] += currentWater; continue;
+                    };
+                    let lowestNeighbor = { x: -1, y: -1, totalHeight: elevationMap[y][x] + currentWater };
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
+                            const neighborTotalHeight = elevationMap[ny][nx] + waterMap[ny][nx];
+                            if (neighborTotalHeight < lowestNeighbor.totalHeight) {
+                                lowestNeighbor = { x: nx, y: ny, totalHeight: neighborTotalHeight };
+                            }
+                        }
+                    }
+                    if (lowestNeighbor.x !== -1) {
+                        const heightDifference = (elevationMap[y][x] + currentWater) - lowestNeighbor.totalHeight;
+                        const waterToMove = Math.max(0, Math.min(currentWater, heightDifference / 2.0) * flowSpeed);
+                        if (waterToMove > 0) {
+                            waterFromNeighbors[lowestNeighbor.y][lowestNeighbor.x] += waterToMove;
+                            currentWater -= waterToMove;
+                        }
+                    }
+                    waterFromNeighbors[y][x] += currentWater;
+                }
+            }
+        }
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                let currentWater = waterFromNeighbors[y][x];
+                if (currentWater <= 0.001) { waterMap[y][x] = 0; continue; }
+                const isRiver = riverMap[y][x] === 1;
+                if(isRiver) currentWater += riverSeepage;
+                const temp = temperatureMap[y][x];
+                let baseEvaporation = 0.02 / TICKS_PER_DAY;
+                if(temp > 25) baseEvaporation *= (1 + (temp-25) / 10);
+                const evaporationRate = baseEvaporation;
+                currentWater *= (1 - evaporationRate);
+                if (riverMap[y][x] === 2 && iceMap[y][x] > 0.2) {
+                     currentWater *= (1 - (baseEvaporation * (iceMap[y][x] / 4.0)));
+                }
+                waterMap[y][x] = Math.max(0, currentWater);
+                if (waterMap[y][x] > 0.001) {
+                    nextActiveChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
+                }
+            }
+        }
+        activeChunks = nextActiveChunks;
     }
 
     function updateEcology() {
@@ -1690,40 +1813,6 @@
         
         annualPrecipitationMap.forEach(r => r.fill(0));
         if(forestDirty) staticMapDirty = true;
-    }
-
-    function updateIce() {
-        const freezeRate = 0.02 / TICKS_PER_DAY, meltRate = 0.04 / TICKS_PER_DAY, maxIce = 4.0;
-        const averageWorldTemp = temperatureMap.flat().reduce((a, b) => a + b, 0) / (MAP_WIDTH * MAP_HEIGHT);
-        
-        for(let y=0; y<MAP_HEIGHT; y++) {
-            for(let x=0; x<MAP_WIDTH; x++) {
-                if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] > 0) {
-                    const temp = temperatureMap[y][x];
-                    const salinity = salinityMap[y][x];
-                    let freezePoint = 0.0 - (salinity * 2.0);
-                    let canFreeze = false;
-
-                    if (humanMap[y]?.[x]?.type === HUMAN_TILE_TYPES.PORT) {
-                        freezePoint -= 5; // Harbor activity prevents freezing
-                    }
-
-                    if(temp < freezePoint) {
-                        if (salinity < 0.8) { // Freshwater or brackish water freezes normally
-                            canFreeze = true;
-                        } else if (averageWorldTemp < -20) { // Saltwater only freezes in extreme global cold (-20 C), as requested.
-                            canFreeze = true;
-                        }
-                    }
-
-                    if(canFreeze) {
-                        iceMap[y][x] = Math.min(maxIce, iceMap[y][x] + (freezePoint - temp) * freezeRate);
-                    } else if (temp > freezePoint && iceMap[y][x] > 0) {
-                        iceMap[y][x] = Math.max(0, iceMap[y][x] - (temp - freezePoint) * meltRate);
-                    }
-                }
-            }
-        }
     }
 
     function updateErosion() {
@@ -1789,108 +1878,6 @@
         if (dirty) staticMapDirty = true;
     }
 
-    function updateWaterFlow() {
-        const flowSpeed = 0.5, riverSeepage = 0.005 / TICKS_PER_DAY;
-        const groundwaterFeedRate = 0.01 / TICKS_PER_DAY;
-        const groundwaterDiffusionRate = 0.1 / TICKS_PER_DAY;
-
-        let nextGroundwaterMap = groundwaterMap.map(arr => arr.slice());
-        for (let y = 0; y < MAP_HEIGHT; y++) {
-            for (let x = 0; x < MAP_WIDTH; x++) {
-                 if (elevationMap[y][x] > BIOMES.OCEAN.threshold) {
-                    let neighborSum = 0, neighborCount = 0;
-                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-                        if (dx === 0 && dy === 0) continue;
-                        const nx = x + dx, ny = y + dy;
-                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT && elevationMap[ny][nx] > BIOMES.OCEAN.threshold) {
-                            neighborSum += groundwaterMap[ny][nx];
-                            neighborCount++;
-                        }
-                    }
-                    if (neighborCount > 0) {
-                        const avgNeighbor = neighborSum / neighborCount;
-                        nextGroundwaterMap[y][x] += (avgNeighbor - groundwaterMap[y][x]) * groundwaterDiffusionRate;
-                    }
-                }
-            }
-        }
-        groundwaterMap = nextGroundwaterMap;
-
-        for (let y = 0; y < MAP_HEIGHT; y++) {
-            for (let x = 0; x < MAP_WIDTH; x++) {
-                if (riverMap[y][x] > 0 && groundwaterMap[y][x] > 0) {
-                    const feedAmount = Math.min(groundwaterMap[y][x], groundwaterFeedRate);
-                    groundwaterMap[y][x] -= feedAmount;
-                    waterMap[y][x] += feedAmount;
-                    activeChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
-                }
-            }
-        }
-
-        let waterFromNeighbors = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(0));
-        let nextActiveChunks = new Set();
-        for (const chunkKey of activeChunks) {
-            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
-            const startX = chunkX * CHUNK_SIZE, startY = chunkY * CHUNK_SIZE;
-            const endX = Math.min(startX + CHUNK_SIZE, MAP_WIDTH);
-            const endY = Math.min(startY + CHUNK_SIZE, MAP_HEIGHT);
-            for(let y = startY; y < endY; y++) {
-                for(let x = startX; x < endX; x++) {
-                    let currentWater = waterMap[y][x];
-                    if (currentWater <= 0.001 && riverMap[y][x] === 0) continue;
-                    if (elevationMap[y][x] <= BIOMES.OCEAN.threshold || riverMap[y][x] === 2) {
-                        waterFromNeighbors[y][x] += currentWater; continue;
-                    };
-                    let lowestNeighbor = { x: -1, y: -1, totalHeight: elevationMap[y][x] + currentWater };
-                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-                        if (dx === 0 && dy === 0) continue;
-                        const nx = x + dx, ny = y + dy;
-                        if (nx >= 0 && nx < MAP_WIDTH && ny >= 0 && ny < MAP_HEIGHT) {
-                            const neighborTotalHeight = elevationMap[ny][nx] + waterMap[ny][nx];
-                            if (neighborTotalHeight < lowestNeighbor.totalHeight) {
-                                lowestNeighbor = { x: nx, y: ny, totalHeight: neighborTotalHeight };
-                            }
-                        }
-                    }
-                    if (lowestNeighbor.x !== -1) {
-                        const heightDifference = (elevationMap[y][x] + currentWater) - lowestNeighbor.totalHeight;
-                        const waterToMove = Math.max(0, Math.min(currentWater, heightDifference / 2.0) * flowSpeed);
-                        if (waterToMove > 0) {
-                            waterFromNeighbors[lowestNeighbor.y][lowestNeighbor.x] += waterToMove;
-                            currentWater -= waterToMove;
-                        }
-                    }
-                    waterFromNeighbors[y][x] += currentWater;
-                }
-            }
-        }
-
-        for (let y = 0; y < MAP_HEIGHT; y++) {
-            for (let x = 0; x < MAP_WIDTH; x++) {
-                let currentWater = waterFromNeighbors[y][x];
-                if (currentWater <= 0.001) { waterMap[y][x] = 0; continue; }
-                const isRiver = riverMap[y][x] === 1;
-                if(isRiver) currentWater += riverSeepage;
-                
-                const temp = temperatureMap[y][x];
-                let baseEvaporation = 0.02 / TICKS_PER_DAY;
-                if(temp > 25) baseEvaporation *= (1 + (temp-25) / 10);
-                
-                const evaporationRate = baseEvaporation;
-                currentWater *= (1 - evaporationRate);
-
-                if (riverMap[y][x] === 2 && iceMap[y][x] > 0.2) {
-                     currentWater *= (1 - (baseEvaporation * (iceMap[y][x] / 4.0)));
-                }
-                waterMap[y][x] = Math.max(0, currentWater);
-                if (waterMap[y][x] > 0.001) {
-                    nextActiveChunks.add(`${Math.floor(x/CHUNK_SIZE)},${Math.floor(y/CHUNK_SIZE)}`);
-                }
-            }
-        }
-        activeChunks = nextActiveChunks;
-    }
-    
     function updateCurrentParticles() {
         if (viewModeSelect.value !== 'currents') return;
         for (let p of currentParticles) {
@@ -2527,16 +2514,14 @@
         if (tickCounter % TICKS_PER_DAY === 0) {
             day++;
             
-            updateWeather();
-            updateCloudsAndWeather();
-            updateSurfaceWater();
-            updateIce();
-            updateWaterFlow();
+            updateAtmosphere();
+            updateHydrology();
             updateVegetationHealth();
             spawnScheduledTraders();
 
             if (day % 30 === 0) {
                 updateResources();
+                updateErosion();
             }
 
             if (day % 7 === 0) {
@@ -2553,7 +2538,6 @@
             }
 
             if (day % 100 === 0) updateCivilization();
-            if (day % 30 === 0) updateErosion();
             if (day % YEAR_LENGTH === 0) updateEcology();
 
             dayEl.textContent = day;
