@@ -7,7 +7,7 @@
 
 _English below_
 
-🇳🇴 Denne kartsimuleringa skal vere ei rikt detaljert verd i miniformat, eit slags terrarium der ulike system av geografi, klima og sivilisasjon samhandlar for å skape framveksande historier. Denne verdi er inspirert av Ivar Aasens _Nordmannen_ (betre kjend som _Mellom bakkar og berg_). Det er rein og skjær vibecoding i Google Gemini, langt over mine evner, men diskutert fram mellom meg og maskina.
+🇳🇴 Denne kartsimuleringa skal vere ei rikt detaljert verd i miniformat, eit slags terrarium der ulike system av geografi, klima og sivilisasjon samhandlar for å skape framveksande historier. Denne verdi er inspirert av Ivar Aasens _Nordmannen_ (betre kjend som _Mellom bakkar og berg_). Det er rein og skjær vibecoding i Google Gemini, langt over mine evner, men diskutert fram mellom meg og maskina. 
 
 *Siste versjon*: https://tanketom.github.io/verdi/11/
 
@@ -19,9 +19,9 @@ Det minst dynamiske er dyrelivet. 200 makrell er plassert i havet i byrjinga, og
 
 Mindre enn eit faktisk spel er det mest tenkt som ei ambient lita verd ein kan observere, ei klinkekule med fine fargar, som fortel ei unik historie om maur… menn… prikkane som går omkring.
 
-Bruk innstillingerknappen i øvre høgre hjørnet for å justere på kartvisningar, få "debugge" verda, skru opp farten, lage ei ny øygruppe, og liknande.
+Zoom med musehjul og dra med musepeikaren for å sjå dei pikselerte detaljane. Bruk innstillingerknappen i øvre høgre hjørnet for å justere på kartvisningar, få "debugge" verda, skru opp farten, lage ei ny øygruppe, og liknande.
 
-🇬🇧 **English, in brief**: This map simulation is intended to be a richly detailed world in miniature, a kind of terrarium where different systems of geography, climate and civilization interact to create evolving stories. This world is inspired by Ivar Aasen's _Nordmannen_ (better known as Mellom bakkar og berg). It is pure and simple vibecoding in Google Gemini, far beyond my abilities, but discussed between me and the machine. Use the settings button in the top right corner to adjust map views, see legend, get a small debug tool, and generate a new island.
+🇬🇧 **English, in brief**: This map simulation is intended to be a richly detailed world in miniature, a kind of terrarium where different systems of geography, climate and civilization interact to create evolving stories. This world is inspired by Ivar Aasen's _Nordmannen_ (better known as Mellom bakkar og berg). It is pure and simple vibecoding in Google Gemini, far beyond my abilities, but discussed between me and the machine. Zoom with mouse wheel and drag with mouse pointer to move around. Use the settings button in the top right corner to adjust map views, see legend, get a small debug tool, and generate a new island.
 
 ## Versjonar
 På litt halvtilfeldige tidspunkt har eg lagra versjonar her, slik at eg har eit arkiv eller backups å gå tilbake til, i tilfellet maskina fucker opp.
