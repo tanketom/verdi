@@ -1,6 +1,6 @@
 # Pixel Civilization Terrarium
 
-<img width="1090" height="545" alt="Skjermbilde 2025-09-19 kl  09 58 26" src="https://github.com/user-attachments/assets/c2f959d4-b2de-4247-b2c1-6b4a0cad773b" />
+<img width="1090" height="545" alt="A pixelated map of an island group with cities, roads with travellers, fishing boats and trade ships" src="https://github.com/user-attachments/assets/c2f959d4-b2de-4247-b2c1-6b4a0cad773b" />
 
 > Mellom bakkar og berg ut med havet\
 > Heve nordmannen fenge sin heim\
@@ -66,4 +66,5 @@ På litt halvtilfeldige tidspunkt har eg lagra versjonar her, slik at eg har eit
 * Utvide og spesialisere kartvisningane
   * [ ]  Få ei kartvisning som ser ut som eit handteikna gamalt (statisk?) kart
 * [ ]  Justere matmengd slik at det, teoretisk sett, kan bli ei mangelvare
+* [ ]  Få litt meir skikk på kartets størrelsesforhold
 * [ ]  Lære meg å kode, så eg kan gjere desse greiene sjølve i staden for å be ei litt dum, men flink maskin om å gjere det
