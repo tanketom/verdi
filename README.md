@@ -12,7 +12,7 @@ _English below_
 
 🇳🇴 Denne kartsimuleringa skal vere ei rikt detaljert verd i miniformat, eit slags terrarium der ulike system av geografi, klima og sivilisasjon samhandlar for å skape framveksande historier. Denne verdi er inspirert av Ivar Aasens _Nordmannen_ (betre kjend som _Mellom bakkar og berg_). Det er rein og skjær vibecoding i Google Gemini, langt over mine evner, men diskutert fram mellom meg og maskina. 
 
-*Siste versjon*: [https://tanketom.github.io/verdi/11/](https://tanketom.github.io/verdi/11/)
+*Siste versjon*: [https://tanketom.github.io/verdi/12/](https://tanketom.github.io/verdi/12/)
 
 ### Bakkar og berg
 Utgangspunktet er ei prosedural øy skapa ved hjelp av simpleksstøy, som lagar ei øygruppe frå djupe hav og sandstrender til bølgjande åser, og snødekte fjelltoppar. Landskapet er ikkje statisk, ein enkel miljømodell simulerar erosjon og graver ut elver som renner frå fjell til hav, medan skogar spreier seg organisk over tid. Oppå dette ligg eit klimasystem som simulerar temperaturendringar, skydanning og nedbør påverka av vind og terreng. Kombinert med havstraumar skapar dette eit dynamisk vær gjennom året, som har kalde fjelltoppar, lune regnskuggar, og værbitte kystar.
@@ -58,6 +58,9 @@ På litt halvtilfeldige tidspunkt har eg lagra versjonar her, slik at eg har eit
 
 11: [https://tanketom.github.io/verdi/11/](https://tanketom.github.io/verdi/11/)
 * Religiøse/spirituelle utpostar kan no danne seg i ulike "unike" geografiske stader, som på det høgaste fjellet, den største skogen, den mest isolerte øya, den lengste elva, osv.
+
+12: [https://tanketom.github.io/verdi/12/](https://tanketom.github.io/verdi/12/)
+* Refaktorering av koden, slått saman liknande funksjonar, og så vidare.
 
 ## Todo
 * Narrativ
