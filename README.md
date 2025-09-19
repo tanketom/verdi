@@ -12,7 +12,7 @@ _English below_
 
 🇳🇴 Denne kartsimuleringa skal vere ei rikt detaljert verd i miniformat, eit slags terrarium der ulike system av geografi, klima og sivilisasjon samhandlar for å skape framveksande historier. Denne verdi er inspirert av Ivar Aasens _Nordmannen_ (betre kjend som _Mellom bakkar og berg_). Det er rein og skjær vibecoding i Google Gemini, langt over mine evner, men diskutert fram mellom meg og maskina. 
 
-*Siste versjon*: https://tanketom.github.io/verdi/11/
+*Siste versjon*: [https://tanketom.github.io/verdi/11/]
 
 ### Bakkar og berg
 Utgangspunktet er ei prosedural øy skapa ved hjelp av simpleksstøy, som lagar ei øygruppe frå djupe hav og sandstrender til bølgjande åser, og snødekte fjelltoppar. Landskapet er ikkje statisk, ein enkel miljømodell simulerar erosjon og graver ut elver som renner frå fjell til hav, medan skogar spreier seg organisk over tid. Oppå dette ligg eit klimasystem som simulerar temperaturendringar, skydanning og nedbør påverka av vind og terreng. Kombinert med havstraumar skapar dette eit dynamisk vær gjennom året, som har kalde fjelltoppar, lune regnskuggar, og værbitte kystar.
@@ -32,31 +32,31 @@ Zoom med musehjul og dra med musepeikaren for å sjå dei pikselerte detaljane. 
 ## Versjonar
 På litt halvtilfeldige tidspunkt har eg lagra versjonar her, slik at eg har eit arkiv eller backups å gå tilbake til, i tilfellet maskina fucker opp.
 
-1: https://tanketom.github.io/verdi/1/
+1: [https://tanketom.github.io/verdi/1/]
 * Geografi og vær, lite anna
 
-2: https://tanketom.github.io/verdi/1/
+2: [https://tanketom.github.io/verdi/2/]
 * La til havstraumar
 
-3: https://tanketom.github.io/verdi/1/
+3: [https://tanketom.github.io/verdi/3/]
 * Testa eit enkelt økosystem, fører stort sett til at alt døyr ut kjapt. Maskina er ikkje så god på å balansere slikt, og eg var ikkje motivert for å justere i alle spakane sjølv, eg ville lage meir ting
 
-4: https://tanketom.github.io/verdi/1/
+4: [https://tanketom.github.io/verdi/4/]
 * Fjerna dyra, la til myttji lys og myttji varme
 
-5: https://tanketom.github.io/verdi/1/
+5: [https://tanketom.github.io/verdi/5/]
 * Dei første spora av menneske i raude bymarkørar.
 
-6: https://tanketom.github.io/verdi/6/
+6: [https://tanketom.github.io/verdi/6/]
 * Menneska byrjer å gå frå by til by. Ein og anna dysfunksjonell fiskebåt går ut frå (lilla) havner.
 
-7: https://tanketom.github.io/verdi/7
-8: https://tanketom.github.io/verdi/8/
-9: https://tanketom.github.io/verdi/9/
-10: https://tanketom.github.io/verdi/10/
+7: [https://tanketom.github.io/verdi/7/]
+8: [https://tanketom.github.io/verdi/8/]
+9: [https://tanketom.github.io/verdi/9/]
+10: [https://tanketom.github.io/verdi/10/]
 * Diverse småinkrementeringar. La til dyrka mark, utpostar av ulikt slag, og forsøkte å effektivisere systemet litt.
 
-11: https://tanketom.github.io/verdi/11/
+11: [https://tanketom.github.io/verdi/11/]
 * Religiøse/spirituelle utpostar kan no danne seg i ulike "unike" geografiske stader, som på det høgaste fjellet, den største skogen, den mest isolerte øya, den lengste elva, osv.
 
 ## Todo
