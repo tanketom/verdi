@@ -67,4 +67,5 @@ På litt halvtilfeldige tidspunkt har eg lagra versjonar her, slik at eg har eit
   * [ ]  Få ei kartvisning som ser ut som eit handteikna gamalt (statisk?) kart
 * [ ]  Justere matmengd slik at det, teoretisk sett, kan bli ei mangelvare
 * [ ]  Få litt meir skikk på kartets størrelsesforhold
+* [ ]  Nårgsk språk
 * [ ]  Lære meg å kode, så eg kan gjere desse greiene sjølve i staden for å be ei litt dum, men flink maskin om å gjere det
